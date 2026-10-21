@@ -23,8 +23,12 @@ import {
   DEFAULT_MIN_TOOL_CALLS,
   DEFAULT_STYLE,
   DEFAULT_ANNOUNCE_PLAN,
+  DEFAULT_REMINDER,
+  DEFAULT_REMINDER_ORDER,
+  REMINDER_SECTION_NAME,
   STYLES,
   SECTION_NAME,
+  buildReminderText,
 } from '../lib/core.js'
 
 /** Minimal stand-in for a Cordis plugin context with a prompt registry. */
@@ -53,12 +57,14 @@ function fakeCtx({ withEvents = true } = {}) {
   return { ctx, sections, effectLabels, listeners }
 }
 
-/** Mount with a config and return the single registered section. */
+/** Mount with a config and return the main registered section. */
 function mount(config, options) {
   const { ctx, sections } = fakeCtx(options)
   apply(ctx, config)
-  assert.equal(sections.length, 1, 'expected exactly one prompt section')
-  return sections[0]
+  assert.equal(sections.length, 2, 'expected the main section and the reminder')
+  const section = sections.find((candidate) => candidate.name === SECTION_NAME)
+  assert.ok(section, 'the main section must be registered')
+  return section
 }
 
 /** Mount and render the section body as the prompt registry would. */
@@ -87,13 +93,14 @@ test('plugin exports the Cordis shape', () => {
   assert.deepEqual(STYLES, ['concise', 'standard', 'verbose'])
 })
 
-test('registers one prompt section with the documented defaults', () => {
+test('registers the main section and a reminder with the documented defaults', () => {
   const { ctx, sections, effectLabels } = fakeCtx()
   apply(ctx, {})
-  assert.equal(sections.length, 1)
+  assert.equal(sections.length, 2)
   assert.ok(effectLabels.includes('interim-narration.section()'))
+  assert.ok(effectLabels.includes('interim-narration.reminder()'))
   assert.ok(effectLabels.includes('interim-narration.volatile-log'))
-  const [section] = sections
+  const section = sections.find((candidate) => candidate.name === SECTION_NAME)
   assert.equal(section.name, SECTION_NAME)
   assert.equal(section.order, DEFAULT_ORDER)
   assert.equal(section.interpolate, false)
@@ -107,6 +114,9 @@ test('registers one prompt section with the documented defaults', () => {
   // 0.3.1: the turn must open with the model's understanding and plan.
   assert.match(text, /调用任何工具之前/)
   assert.match(text, /第一步是什么/)
+  // The contract must also forbid silent tool chains outright.
+  assert.match(text, /硬性要求/)
+  assert.match(text, /不允许「工具调用 → 工具调用」全程静默/)
   // A mistake in the template must never leak JS values into the prompt.
   assert.doesNotMatch(text, /\bundefined\b|\bnull\b|\[object Object\]/)
 })
@@ -134,11 +144,11 @@ test('the section body is read lazily from volatile references', () => {
   assert.match(section.text(), /## 过程叙述/)
 })
 
-test('enabled: false keeps the section registered (empty body)', () => {
+test('enabled: false keeps both sections registered (empty bodies)', () => {
   const { ctx, sections } = fakeCtx()
   apply(ctx, { enabled: false })
-  assert.equal(sections.length, 1)
-  assert.equal(sections[0].text(), '')
+  assert.equal(sections.length, 2)
+  for (const section of sections) assert.equal(section.text(), '')
 })
 
 test('plainValues unwraps volatile references and copies plain fields', () => {
@@ -222,6 +232,37 @@ test('announcePlan: false drops only the opening lines', () => {
   assert.ok(off.trim().length > 200)
 })
 
+test('a short reminder sits near the end of the system prompt', () => {
+  const { ctx, sections } = fakeCtx()
+  apply(ctx, {})
+  const reminder = sections.find((candidate) => candidate.name === REMINDER_SECTION_NAME)
+  assert.ok(reminder, 'reminder section must be registered')
+  assert.equal(reminder.order, DEFAULT_REMINDER_ORDER)
+  assert.ok(reminder.order > DEFAULT_ORDER, 'the reminder must come after the main contract')
+  assert.equal(reminder.interpolate, false)
+  const text = reminder.text()
+  assert.match(text, /## 过程叙述提醒/)
+  assert.match(text, /调用第一个工具之前/)
+  assert.match(text, /不要整轮只调工具、不说话/)
+})
+
+test('the reminder follows announcePlan, language and its own toggle', () => {
+  assert.match(buildReminderText(resolveConfig({ announcePlan: false })), /先写一句正文说明你准备做什么/)
+  assert.doesNotMatch(buildReminderText(resolveConfig({ announcePlan: false })), /第一步是什么/)
+  assert.match(buildReminderText(resolveConfig({ language: 'en' })), /## Narration reminder/)
+  assert.match(buildReminderText(resolveConfig({ language: 'en' })), /never run a whole turn of tool calls in silence/)
+
+  const { ctx, sections } = fakeCtx()
+  apply(ctx, { reminder: false })
+  const reminder = sections.find((candidate) => candidate.name === REMINDER_SECTION_NAME)
+  assert.equal(reminder.text(), '', 'reminder: false must empty the second section')
+})
+
+test('the English contract also forbids silent tool chains', () => {
+  assert.match(render({ language: 'en' }), /Hard requirement/)
+  assert.match(render({ language: 'en' }), /never chain tool calls in complete silence/)
+})
+
 test('the English contract also opens with the plan', () => {
   assert.match(render({ language: 'en' }), /Right after the new message, before calling any tool/)
   assert.doesNotMatch(
@@ -270,6 +311,7 @@ test('resolveConfig fills defaults', () => {
     reportBlockers: true,
     ackSteering: true,
     announcePlan: DEFAULT_ANNOUNCE_PLAN,
+    reminder: DEFAULT_REMINDER,
     text: undefined,
     extra: undefined,
     debug: false,
@@ -294,6 +336,7 @@ test('resolveConfig rejects bad values', () => {
     [{ reportBlockers: 1 }, /config\.reportBlockers/],
     [{ ackSteering: 'no' }, /config\.ackSteering/],
     [{ announcePlan: 'yes' }, /config\.announcePlan/],
+    [{ reminder: 'yes' }, /config\.reminder/],
     [{ text: 1 }, /config\.text/],
     [{ extra: false }, /config\.extra/],
     [{ debug: 'on' }, /config\.debug/],
@@ -326,7 +369,9 @@ test('debug log records the mount and rotates oversized files', () => {
     const content = fs.readFileSync(logFile, 'utf8')
     assert.ok(content.length < 70 * 1024, 'log should have been rotated before writing')
     assert.match(content, /mounted order=8950 style=concise maxSentences=2 minToolCalls=1/)
+    assert.match(content, /reminder=true sectionChars=\d+ reminderChars=\d+/)
     assert.match(content, /--- section text ---/)
+    assert.match(content, /--- reminder text ---/)
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
   }
@@ -352,7 +397,7 @@ test('live settings edits leave a debug line', () => {
 test('a broken log path never breaks mounting', () => {
   const { ctx, sections } = fakeCtx()
   apply(ctx, { debug: true, logFile: path.join(os.tmpdir(), 'no-such-dir-xyz', 'a.log') })
-  assert.equal(sections.length, 1)
+  assert.equal(sections.length, 2)
 })
 
 // --- runner ---------------------------------------------------------------

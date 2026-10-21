@@ -1,7 +1,7 @@
 {
   "name": "dsh-interim-narration",
-  "version": "0.3.1",
-  "description": "让 DeepSeek Harness 的 agent 每轮先讲理解与计划、在工具调用之间用正文写过程叙述（边做边说），并在「插件 → 本插件 → 配置」里直接调整参数",
+  "version": "0.3.2",
+  "description": "让 DeepSeek Harness 的 agent 每轮先讲理解与计划、在工具调用之间用正文写过程叙述（边做边说），并在「插件 → 本插件 → 配置」里直接调整参数；系统提示末尾还有一条短提醒，长任务也不会只顾调工具不说话",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

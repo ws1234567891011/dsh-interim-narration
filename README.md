@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
 
-> **English** — A tiny DeepSeek Harness plugin that makes the agent *think out loud*: every turn opens with how it understands the request and what it will do first, then short hand-off notes appear between batches of tool calls. The notes are ordinary assistant text, rendered in the live process timeline. Zero runtime dependencies, no build step, and since 0.3.0 an optional in-app settings form edits the prompt knobs without touching YAML.
+> **English** — A tiny DeepSeek Harness plugin that makes the agent *think out loud*: every turn opens with how it understands the request and what it will do first, then short hand-off notes appear between batches of tool calls. The notes are ordinary assistant text, rendered in the live process timeline; since 0.3.2 a short reminder near the end of the system prompt keeps long turns from going silent. Zero runtime dependencies, no build step, and since 0.3.0 an optional in-app settings form edits the prompt knobs without touching YAML.
 
 让 DeepSeek Harness 的 agent **边做边说**：每轮先说明自己怎么理解、准备怎么做、第一步是什么，然后在每一批工具调用之间用普通回复正文写一段过程叙述，而不是等全部做完才给一个最终答案。
 
@@ -23,17 +23,18 @@
 
 这是一个很小的 host 侧 Cordis 插件，只做一件事：向系统提示词注册一个段落。
 
-- 段落名 `narration:interim`，order `8950`（位于工具文档之后、交付物指引之前），`interpolate: false`；
+- 主段落 `narration:interim`，order `8950`（位于工具文档之后、交付物指引之前），`interpolate: false`；
+- 提醒段落 `narration:interim-reminder`，order `10150`（位于系统提示尾部、人格后缀之前，约 126 字符），`interpolate: false`；
 - 不注册工具、不注册 UI、不写运行时上下文；
 - 段落正文是一份结构化的写作契约，分四块：
-  - **什么时候说**：收到新消息、调用任何工具之前先开场（1–2 句：怎么理解、准备怎么做、第一步）；之后每批工具调用之后说；轻量调用可并入下一段；长命令/批量修改前先说一句；简单任务可省略中间叙述，但开场保留；
+  - **什么时候说**：收到新消息、调用任何工具之前先开场（1–2 句：怎么理解、准备怎么做、第一步）；之后每批工具调用之后说；**硬性要求**：只要调用了工具就必须至少写一段正文，禁止全程静默；轻量调用可并入下一段；长命令/批量修改前先说一句；简单任务可省略中间叙述，但开场保留；
   - **说什么**：开场给出判断和计划（做什么、为什么、先做哪一步，不要复述用户的话）；刚完成什么 + 关键结论（数字、文件名、判定）、下一步做什么和为什么；失败/受阻先说事实和影响；用户插话先回应一句；委派子代理要说明分工；
   - **详略**：`style` 决定「只给结论 / 结论+必要依据 / 补充证据和风险」；
   - **怎么写**：普通段落、不用标题/列表/加粗；用用户语言；写正文不写 thinking；过程叙述不等于最终答案。
 
 因为过程叙述是**正常 assistant 正文**，它可以出现在 DSH 的过程时间线里，但只有把「工作步骤展示」设置为保留/显示过程时你才看得到（见下）。
 
-从 0.3.0 起，插件还带一个**应用内配置页**：宿主半区导出 schemastery `Config`（可编辑字段声明为 `.volatile()`），客户端半区在「插件 → dsh-interim-narration → 配置」注册表单；保存后 loader 原地更新 volatile 引用，**下一轮提示词立即生效，无需重启**。
+从 0.3.0 起，插件还带一个**应用内配置页**：宿主半区导出 schemastery `Config`（可编辑字段声明为 `.volatile()`），客户端半区在「插件 → dsh-interim-narration → 配置」注册表单；保存后 loader 原地更新 volatile 引用，**下一轮提示词立即生效，无需重启**。尾部提醒段主要用于对抗长任务漂移：模型很容易在连续调工具时忘记叙述，所以把同一条要求在系统提示最后再放一遍。
 
 ## 安装
 
@@ -81,7 +82,7 @@ cp -r <本目录> node_modules/dsh-interim-narration
 2. 点该行的 **配置** 按钮，进入表单页；
 3. 改完点 **保存**。保存会写入当前 profile 的 `cordis.patch.yml`，并**立即生效**（下一轮对话的系统提示词就带新配置；无需重启、无需刷新）。
 
-表单里可以改：`enabled`、`style`、`maxSentences`、`minToolCalls`、`language`、`debug`、`reportBlockers`、`ackSteering`、`announcePlan`。
+表单里可以改：`enabled`、`style`、`maxSentences`、`minToolCalls`、`language`、`debug`、`reportBlockers`、`ackSteering`、`announcePlan`、`reminder`。
 其余字段（`order`、`text`、`extra`、`logFile`）属于安装期配置，仍需编辑 profile patch 或重新安装后生效。
 
 > 说明：这个表单走的是 DSH 官方设置通道（`plugins.row.config` 插槽 + `configForms` 服务 + 宿主 `settings` 服务），
@@ -123,12 +124,13 @@ cp -r <本目录> node_modules/dsh-interim-narration
 | `reportBlockers` | `true` | 是否要求失败/受阻/计划变更时先说明再继续 |
 | `ackSteering` | `true` | 是否要求用户中途插话时先回应一句再继续 |
 | `announcePlan` | `true` | 是否要求每轮开场（首次工具调用前）先说理解、计划与第一步；关掉只去掉开场要求 |
+| `reminder` | `true` | 是否在系统提示尾部再放一条短提醒（约 126 字符），防止长任务里只顾调工具、不说话 |
 | `text` | 无 | 完全替换内置文案 |
 | `extra` | 无 | 追加到内置文案（或 `text`）之后的自定义要求 |
 | `debug` | `false` | 写挂载日志，便于确认插件真的生效（超过 64 KiB 会自动清空重写） |
 | `logFile` | `$DSH_HOME/dsh-interim-narration.log` | debug 日志路径 |
 
-其中 `enabled`、`style`、`maxSentences`、`minToolCalls`、`language`、`debug`、`reportBlockers`、`ackSteering`、`announcePlan`
+其中 `enabled`、`style`、`maxSentences`、`minToolCalls`、`language`、`debug`、`reportBlockers`、`ackSteering`、`announcePlan`、`reminder`
 是 **volatile** 字段，可在应用内表单修改并立即生效；`order`、`text`、`extra`、`logFile` 需要改 patch（重载后生效）。
 
 ### 三档预设
@@ -142,7 +144,8 @@ cp -r <本目录> node_modules/dsh-interim-narration
 ## 验证是否生效
 
 - 把 `config.debug` 设为 `true`（应用内配置页也能开），查看 `~/.dsh/dsh-interim-narration.log`，应出现
-  `mounted order=8950 style=standard maxSentences=3 minToolCalls=2 enabled=true sectionChars=<n>` 以及段落正文；
+  `mounted order=8950 style=standard maxSentences=3 minToolCalls=2 enabled=true reminder=true sectionChars=<n> reminderChars=<n>`，
+  以及 `--- section text ---` 与 `--- reminder text ---` 两段正文；
   在配置页保存后，同一文件会出现 `volatile-update paths=… enabled=true style=… sectionChars=…`（说明引用被原地更新）；
 - 或让 agent 回答："原样输出系统提示里以『## 过程叙述』开头的那一段"。
 
@@ -168,7 +171,7 @@ dsh-interim-narration/
 │   ├── index.js       # schemastery Config（volatile 可编辑字段）与公共导出
 │   └── client.js      # 手写 Web bundle（window.__ModuleLoader__.load）注册配置页
 ├── test/
-│   ├── smoke.mjs            # 宿主逻辑断言（24 个用例）
+│   ├── smoke.mjs            # 宿主逻辑断言（27 个用例）
 │   ├── client-smoke.mjs     # 客户端 bundle 注册/渲染断言
 │   ├── mock-llm.mjs         # 本地 OpenAI 兼容 mock，用于端到端验证
 │   └── overlay-mock.example.yml
@@ -195,7 +198,7 @@ dsh-interim-narration/
 node test/smoke.mjs
 ```
 
-24 个用例覆盖：插件形状、默认段 order/interpolate/文案、每轮开场要求（`announcePlan` 默认开启/关闭时只去掉开场行/简单任务仍保留开场）、`style` 预设与显式覆盖、`minToolCalls` 阈值、`reportBlockers`/`ackSteering` 开关、`enabled: false` 时文本为空、`language`/`order` 生效、`text`+`extra` 覆盖、空 `text` 回退内置文案、volatile 引用懒读取（保存后立即变化）、`plainValues` 解包、配置默认值与 20 余种非法值、正文非空且无模板泄漏、debug 日志写入与超限轮转、坏日志路径不影响挂载、volatile 更新日志行。
+27 个用例覆盖：插件形状、默认段 order/interpolate/文案、每轮开场要求（`announcePlan` 默认开启/关闭时只去掉开场行/简单任务仍保留开场）、`style` 预设与显式覆盖、`minToolCalls` 阈值、`reportBlockers`/`ackSteering` 开关、`enabled: false` 时文本为空、`language`/`order` 生效、`text`+`extra` 覆盖、空 `text` 回退内置文案、volatile 引用懒读取（保存后立即变化）、`plainValues` 解包、配置默认值与 20 余种非法值、正文非空且无模板泄漏、debug 日志写入与超限轮转、坏日志路径不影响挂载、volatile 更新日志行；以及提醒段的注册/顺序/开关/英文版与主契约的「禁止全程静默」硬性要求。
 
 代码分两层：`lib/core.js` 是纯逻辑 + 挂载（只 import Node 内置模块，可独立测试），`lib/index.js` 只声明 schemastery `Config` 并转出。`lib/client.js` 是手写的客户端 bundle（`window.__ModuleLoader__.load`），注册「插件 → 本插件 → 配置」表单。
 
