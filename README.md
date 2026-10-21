@@ -3,6 +3,7 @@
 [![CI](https://github.com/ws1234567891011/dsh-interim-narration/actions/workflows/ci.yml/badge.svg)](https://github.com/ws1234567891011/dsh-interim-narration/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
+[![npm](https://img.shields.io/npm/v/dsh-interim-narration.svg)](https://www.npmjs.com/package/dsh-interim-narration)
 
 > **English** — A tiny DeepSeek Harness plugin that makes the agent *think out loud*: every turn opens with how it understands the request and what it will do first, then short hand-off notes appear between batches of tool calls. The notes are ordinary assistant text, rendered in the live process timeline; since 0.3.2 a short reminder near the end of the system prompt keeps long turns from going silent. Zero runtime dependencies, no build step, and since 0.3.0 an optional in-app settings form edits the prompt knobs without touching YAML.
 
@@ -40,7 +41,15 @@
 
 > 桌面端 profile 由 Electron 应用管理，CLI 不能直接启动 desktop profile，但 `dsh plugin` 子命令可以直接给 desktop profile 装包。
 
-方式一（推荐，CLI，已在 desktop profile 实测）：
+方式一（npm，最省事，已发布到 npm registry）：
+
+```bash
+dsh plugin --profile desktop add dsh-interim-narration
+```
+
+也可以直接 `npm install dsh-interim-narration`，然后把 `dsh-interim-narration` 加入 profile 的 `dsh.profile.bundles`。
+
+方式二（CLI，从本地目录安装，已在 desktop profile 实测）：
 
 ```bash
 # 链接安装：源码目录直接生效，改完 lib/ 重新启用即可（推荐开发时用）
@@ -52,9 +61,9 @@ resources/runtime/cli/bin/dsh.cmd plugin --profile desktop add file:C:/path/to/d
 
 该命令会 `pnpm add` 本地目录并把 `dsh-interim-narration` 加入 `dsh.profile.bundles`。PATH 里已有 `dsh` 时直接用 `dsh plugin ...`。
 
-方式二（应用内）：侧边栏 **插件** 页 → 安装本地插件（指向本目录 / `link:` 路径）→ 把 `dsh-interim-narration` 选入组合包并启用。
+方式三（应用内）：侧边栏 **插件** 页 → 安装本地插件（指向本目录 / `link:` 路径）→ 把 `dsh-interim-narration` 选入组合包并启用。
 
-方式三（自建 profile，如 headless/tui）：
+方式四（自建 profile，如 headless/tui）：
 
 ```bash
 cd ~/.dsh/profiles/<name>
@@ -62,7 +71,7 @@ pnpm add C:\path\to\dsh-interim-narration   # 或 link:C:\path\to\dsh-interim-na
 # 然后把 dsh-interim-narration 加入该 profile 的 dsh.profile.bundles
 ```
 
-方式四（手工最小安装，不经过包管理器，profile 目录下）：
+方式五（手工最小安装，不经过包管理器，profile 目录下）：
 
 ```bash
 mkdir -p node_modules

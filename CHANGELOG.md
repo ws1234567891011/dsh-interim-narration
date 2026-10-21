@@ -12,6 +12,8 @@
 - 提醒文案跟随 `announcePlan` 与 `language`：关掉开场要求时提醒只要求「先写一句准备做什么」；英文配置输出英文提醒。
 - debug 日志新增 `reminder=true ... reminderChars=<n>` 与 `--- reminder text ---` 段，便于确认两段都挂载。
 - 测试 24 → 27 个（提醒段注册/顺序/内容、reminder 开关、英文提醒、主契约硬性要求、双段挂载）。
+- 已发布到 npm：`npm i dsh-interim-narration` / `dsh plugin add dsh-interim-narration`
+  （https://www.npmjs.com/package/dsh-interim-narration）。
 
 ## 0.3.1
 
