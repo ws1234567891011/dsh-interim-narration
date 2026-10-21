@@ -1,0 +1,26 @@
+# ============================================================================
+# dsh-interim-narration — bundle patch
+# ============================================================================
+# 插件的“挂载声明”。DSH 启动时按 bundle 层栈叠加各插件 patch，本文件把下面
+# 这一行插入 profile 的配置树；行里的 config 就是插件配置的初始值。
+#
+# 图省事可以只改一次：下面的字段（enabled / style / maxSentences /
+# minToolCalls / language / debug / reportBlockers / ackSteering）都可以在
+# 「插件 → dsh-interim-narration → 配置」里直接改，保存后立即生效。
+# 只有 order、text、extra、logFile 这类安装期选项才需要编辑本文件并重载。
+#
+# 安装（本地目录，未发布到 npm 时）：
+#   dsh plugin --profile desktop add link:C:\path\to\dsh-interim-narration
+#
+# 卸载：
+#   dsh plugin --profile desktop remove dsh-interim-narration
+#   （或在 Web 侧边栏「插件」页停用/移除）
+# ============================================================================
+
+- insert:
+    - id: dsh-interim-narration
+      name: dsh-interim-narration
+      config:
+        enabled: true
+        style: standard
+        minToolCalls: 2

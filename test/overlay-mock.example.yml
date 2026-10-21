@@ -1,0 +1,24 @@
+- id: llm-pi-ai
+  config:
+    providers:
+      mock:
+        displayName: Mock
+        api: openai-completions
+        apiKeyEnv: MOCK_API_KEY
+        baseURL: http://127.0.0.1:18080/v1
+        models:
+          - id: mock-model
+            name: Mock Model
+            contextWindow: 131072
+- id: agent-default-model
+  config:
+    provider: mock
+    model: mock-model
+- insert:
+    - id: dsh-interim-narration
+      name: dsh-interim-narration
+      config:
+        enabled: true
+        style: standard
+        minToolCalls: 2
+        debug: true

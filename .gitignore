@@ -1,0 +1,18 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# test / runtime artifacts
+*.log
+mock-llm-requests/
+test/overlay-mock.local.yml
+
+# editors and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# local env / secrets
+.env
+.env.*
