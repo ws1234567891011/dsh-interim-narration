@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
 
-> **English** — A tiny [DeepSeek Harness](https://github.com/deepseek-ai) plugin that makes the agent *think out loud*: every turn opens with how it understands the request and what it will do first, then short hand-off notes appear between batches of tool calls. The notes are ordinary assistant text, rendered in the live process timeline. Zero runtime dependencies, no build step, and since 0.3.0 an optional in-app settings form edits the prompt knobs without touching YAML.
+> **English** — A tiny DeepSeek Harness plugin that makes the agent *think out loud*: every turn opens with how it understands the request and what it will do first, then short hand-off notes appear between batches of tool calls. The notes are ordinary assistant text, rendered in the live process timeline. Zero runtime dependencies, no build step, and since 0.3.0 an optional in-app settings form edits the prompt knobs without touching YAML.
 
 让 DeepSeek Harness 的 agent **边做边说**：每轮先说明自己怎么理解、准备怎么做、第一步是什么，然后在每一批工具调用之间用普通回复正文写一段过程叙述，而不是等全部做完才给一个最终答案。
 
