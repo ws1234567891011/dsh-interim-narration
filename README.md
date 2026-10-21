@@ -7,6 +7,8 @@
 
 > **English** — A tiny DeepSeek Harness plugin that makes the agent *think out loud*: every turn opens with how it understands the request and what it will do first, then short hand-off notes appear between batches of tool calls. The notes are ordinary assistant text, rendered in the live process timeline. Since 0.4.0 the plugin page also has a one-click *display* bridge (the process stays expanded instead of collapsing into a tool-call counter) and a mechanism-level safety net: if a tool step carried no narration, the end-of-prompt reminder gets sharper for the next step. Zero runtime dependencies, no build step, and an optional in-app settings form edits the prompt knobs without touching YAML.
 
+**简体中文** | [English](README.en.md)
+
 让 DeepSeek Harness 的 agent **边做边说**：每轮先说明自己怎么理解、准备怎么做、第一步是什么，然后在每一批工具调用之间用普通回复正文写一段过程叙述，而不是等全部做完才给一个最终答案。
 
 效果（配合聊天的「工作步骤展示」设置）是类似这样的过程时间线：
@@ -98,10 +100,21 @@ cp -r <本目录> node_modules/dsh-interim-narration
 
 表单里可以改：`enabled`、`style`、`maxSentences`、`minToolCalls`、`language`、`debug`、`reportBlockers`、`ackSteering`、`announcePlan`、`reminder`、`enforce`、`escalateAfter`。
 其余字段（`order`、`text`、`extra`、`logFile`）属于安装期配置，仍需编辑 profile patch 或重新安装后生效。
+每个字段右侧的 ↺ 可单独「恢复默认」（取消该字段在 profile patch 里的覆盖），底部「全部恢复默认」一次清掉 12 个覆盖。
 页面底部的「聊天里的显示」区块可以顺手把「工作步骤展示 / 收起时机」调好（见下一节）。
 
 > 说明：这个表单走的是 DSH 官方设置通道（`plugins.row.config` 插槽 + `configForms` 服务 + 宿主 `settings` 服务），
 > 保存语义与官方插件配置页一致（CAS 版本校验、只写 volatile 字段、写当前 profile patch）。
+
+## 快捷命令 `/narration`（0.5.0+）
+
+在聊天输入框里输入 `/narration` 回车，会弹出一个选择面板：
+
+- 快捷切换详略：简洁 / 标准 / 详细（当前档位带 ✓）；
+- 一键开关 `enabled`；
+- 「让过程全程可见」「恢复默认显示」两行直接调整 Chat 的工作步骤展示与收起时机。
+
+选中即写入并立即生效。命令通过 `ctx.inject(['commandUi'])` 可选注册：宿主没有命令服务时自动跳过，不影响其他功能。
 
 ## 让过程叙述真的可见
 
@@ -195,31 +208,39 @@ dsh-interim-narration/
 │   └── client.js      # 手写 Web bundle（window.__ModuleLoader__.load）注册配置页
 ├── test/
 │   ├── smoke.mjs            # 宿主逻辑断言（33 个用例）
-│   ├── client-smoke.mjs     # 客户端 bundle 注册/渲染断言
+│   ├── client-smoke.mjs     # 客户端 bundle 注册/渲染、/narration、恢复默认断言
+│   ├── pack-smoke.mjs       # npm pack 文件清单与 manifest 校验
 │   ├── mock-llm.mjs         # 本地 OpenAI 兼容 mock，用于端到端验证
 │   └── overlay-mock.example.yml
+├── docs/images/narration-flow.svg
 ├── cordis.patch.yml
 ├── package.json
+├── README.en.md
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
+├── SECURITY.md
 └── LICENSE
 ```
 
 ## 兼容性
 
 - 需要 DSH `0.2.x`（`0.2.1-rc.2` 上验证）；插件只依赖宿主注入的 `systemPrompt` 服务，客户端半区依赖 `slots` / `locale` / `configForms` 三个内建服务。
+- `/narration` 命令额外依赖 `commandUi` 服务，缺失时命令自动跳过，其余功能不受影响。
 - `announcePlan` 等应用内配置页需要 DSH `0.2.x` 的设置服务（`plugins.row.config` + `configForms`）；更老的宿主上插件仍可工作，只是没有表单。
 - 0.4.0 的机制级兜底会监听根上下文的 `session/event`（`turn/start`、`assistant/message`）来数「静默步数」；宿主不提供该事件时状态机保持 0，插件退化为纯提示词模式，其余功能不受影响。
 - 运行时不需要任何 npm 依赖；`@deepseek-ai/schemastery` 是宿主提供的 optional peer，只用于声明 `Config`。
 
 ## 贡献
 
-欢迎 issue / PR，详见 [CONTRIBUTING.md](CONTRIBUTING.md)。CI 会在 Node 20/22/24 上跑 `node test/smoke.mjs` 与 `node test/client-smoke.mjs`。
+欢迎 issue / PR，详见 [CONTRIBUTING.md](CONTRIBUTING.md)。CI 会在 Node 20/22/24 上依次跑 `node test/smoke.mjs`、`node test/client-smoke.mjs` 与 `node test/pack-smoke.mjs`。
 
 ## 开发
 
 ```bash
-node test/smoke.mjs
+npm test                 # 宿主 33 用例 + 客户端 bundle + npm pack 清单
+node test/smoke.mjs      # 只跑宿主侧
+node test/client-smoke.mjs
+node test/pack-smoke.mjs
 ```
 
 33 个用例覆盖：插件形状、默认段 order/interpolate/文案、每轮开场要求（`announcePlan` 默认开启/关闭时只去掉开场行/简单任务仍保留开场）、`style` 预设与显式覆盖、`minToolCalls` 阈值、`reportBlockers`/`ackSteering` 开关、`enabled: false` 时文本为空、`language`/`order` 生效、`text`+`extra` 覆盖、空 `text` 回退内置文案、volatile 引用懒读取（保存后立即变化）、`plainValues` 解包、配置默认值与 20 余种非法值、正文非空且无模板泄漏、debug 日志写入与超限轮转、坏日志路径不影响挂载、volatile 更新日志行；提醒段的注册/顺序/开关/英文版与主契约的「禁止全程静默」硬性要求；以及 0.4.0 的静默步跟踪（`analyzeAssistantMessage` 区分正文与工具块、`turn/start` 重置、静默一步/多步的加压文案、开口后清零、`enforce` 关闭或未达阈值时保持静态、无会话信息时不升级）。

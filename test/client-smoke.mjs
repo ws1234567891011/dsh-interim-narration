@@ -81,11 +81,31 @@ const chatScope = {
 }
 
 const registered = {}
+const commandRegistrations = []
+const commandUi = {
+  register: (contribution) => {
+    commandRegistrations.push(contribution)
+    calls.push(['command.register', contribution.name])
+    return () => {}
+  },
+  decorate: () => () => {},
+}
 const ctx = {
   effect: (fn, label) => {
     calls.push(['effect', label])
     const dispose = fn()
     return () => (typeof dispose === 'function' ? dispose() : undefined)
+  },
+  inject: (names, cb) => {
+    calls.push(['inject', names])
+    const available = { commandUi }
+    if (names.every((name) => available[name])) {
+      // Mirror cordis: the callback receives a child context that inherits the
+      // parent's methods and only adds service lookups for the injected names.
+      const child = Object.create(ctx)
+      child.get = (name) => available[name]
+      cb(child)
+    }
   },
   locale: {
     bind: (ns) => (key, params) => `${ns}.${key}${params ? JSON.stringify(params) : ''}`,
@@ -190,5 +210,69 @@ const saveButton = findNodes(
   (node) => node.type === 'button' && String(node.children?.[0] ?? '').endsWith('save'),
 )[0]
 assert.ok(saveButton, 'save button must exist')
+
+// --- `/narration` command ---------------------------------------------------
+const command = commandRegistrations[0]
+assert.ok(command, 'apply must register the /narration command')
+assert.equal(command.name, 'narration')
+assert.equal(typeof command.label, 'function')
+assert.equal(typeof command.description, 'function')
+assert.equal(command.available({}), true)
+assert.equal(command.ui.kind, 'popupSelect')
+assert.equal(command.ui.searchMode, 'substring')
+const commandLabels = command.ui.searchLabels()
+assert.equal(typeof commandLabels.placeholder, 'string')
+const commandRows = await command.ui.options()
+assert.ok(commandRows.some((row) => row.id === 'style:standard' && row.active === true), 'active style row must be marked')
+assert.ok(commandRows.some((row) => row.id === 'toggle-enable'))
+assert.ok(commandRows.some((row) => row.id === 'display-visible'))
+assert.ok(commandRows.some((row) => row.id === 'display-default'))
+
+await command.ui.onSelect({ id: 'style:verbose' })
+assert.ok(
+  calls.some(([k, ops, rev]) => k === 'mutate' && rev === 3 && JSON.stringify(ops) === JSON.stringify([
+    { op: 'set', path: ['style'], value: 'verbose' },
+  ])),
+  '/narration style pick must write the narration namespace',
+)
+await command.ui.onSelect({ id: 'toggle-enable' })
+assert.ok(
+  calls.some(([k, ops]) => k === 'mutate' && JSON.stringify(ops) === JSON.stringify([
+    { op: 'set', path: ['enabled'], value: false },
+  ])),
+  '/narration toggle must flip enabled',
+)
+await command.ui.onSelect({ id: 'display-visible' })
+assert.ok(
+  calls.some(([k, ops]) => k === 'chat-mutate' && JSON.stringify(ops) === JSON.stringify([
+    { op: 'set', path: ['transcriptView'], value: 'detailed' },
+    { op: 'set', path: ['collapseTiming'], value: 'next-input' },
+  ])),
+  '/narration display preset must write ui-chat',
+)
+
+// --- reset controls --------------------------------------------------------
+const resetButtons = findNodes(
+  container,
+  (node) => node.type === 'button' && String(node.props?.title ?? '').endsWith('resetField'),
+)
+assert.ok(resetButtons.length >= 12, 'every editable field must offer a reset button')
+await resetButtons[0].props.onClick()
+assert.ok(
+  calls.some(([k, ops]) => k === 'mutate' && JSON.stringify(ops) === JSON.stringify([
+    { op: 'unset', path: ['style'] },
+  ])),
+  'reset must send an unset op for that field',
+)
+const resetAllButton = findNodes(
+  container,
+  (node) => node.type === 'button' && String(node.children?.[0] ?? '').endsWith('resetAll'),
+)[0]
+assert.ok(resetAllButton, 'reset-all button must exist')
+await resetAllButton.props.onClick()
+assert.ok(
+  calls.some(([k, ops]) => k === 'mutate' && Array.isArray(ops) && ops.length === 12 && ops.every((op) => op.op === 'unset')),
+  'reset-all must unset all editable fields at once',
+)
 
 console.log('client smoke: all assertions passed')

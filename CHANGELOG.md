@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0
+
+- **`/narration` 斜杠命令**：在聊天输入框里输入 `/narration` 可以打开一个选择面板，直接切换
+  `style` 三档（当前档位带 ✓ 标记）、开关 `enabled`、或一键把聊天显示设成「过程全程可见 / 恢复默认」。
+  命令通过 `ctx.inject(['commandUi'])` 可选注册：宿主没有命令服务时自动跳过，不影响其余功能。
+- **配置页增强**：每个字段右侧新增 ↺「恢复默认」按钮（单字段 `unset`），底部新增「全部恢复默认」
+  （一次 12 个 unset）；`style` 行补充档位与句数的联动提示；显示区块新增「当前：详细 · 下次有新消息时」摘要；
+  恢复默认后立即按新快照重填表单。
+- **英文文档**：新增 `README.en.md`（完整英文说明），主 README 顶部互链。
+- 新增 `docs/images/narration-flow.svg` 流程图；`package.json` 的 `files` 增加 `docs`、`README.en.md`、`SECURITY.md`。
+- 仓库工程化：新增 `SECURITY.md`、`.github/ISSUE_TEMPLATE/bug_report.md`、`feature_request.md`、
+  `.github/PULL_REQUEST_TEMPLATE.md`；CI 增加 `node test/pack-smoke.mjs`。
+- 测试：新增 `test/pack-smoke.mjs`（校验 `npm pack` 的文件清单与 manifest），`client-smoke` 扩展覆盖
+  命令注册/选项/选择写入与恢复默认按钮；`npm test` 现在一次跑三套测试（宿主 33 用例 + 客户端 + 打包）。
+- 版本 0.5.0。
+
 ## 0.4.0
 
 - **看得见：显示桥接**。配置页底部新增「聊天里的显示」区块，直接绑定 Chat 的 `ui-chat` 设置：

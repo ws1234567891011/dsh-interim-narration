@@ -30,3 +30,6 @@ jobs:
 
       - name: Client bundle tests
         run: node test/client-smoke.mjs
+
+      - name: Package manifest tests
+        run: node test/pack-smoke.mjs

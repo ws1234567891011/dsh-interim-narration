@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="480" viewBox="0 0 920 480" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <title>dsh-interim-narration flow</title>
+  <desc>How the plugin makes the agent narrate between tool batches: every turn opens with understanding and plan, each tool batch is followed by a short note, and the final answer comes last.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5568"/>
+    </marker>
+    <marker id="arrowHot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2b6cb0"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="920" height="480" fill="#f7fafc"/>
+
+  <text x="460" y="40" text-anchor="middle" font-size="20" font-weight="600" fill="#1a202c">What the user sees with narration enabled</text>
+  <text x="460" y="64" text-anchor="middle" font-size="13" fill="#4a5568">ordinary assistant text between tool batches, rendered inside the live process timeline</text>
+
+  <!-- transcript panel -->
+  <rect x="40" y="92" width="560" height="352" rx="12" fill="#ffffff" stroke="#cbd5e0" stroke-width="1.5"/>
+  <rect x="40" y="92" width="560" height="40" rx="12" fill="#edf2f7"/>
+  <rect x="40" y="120" width="560" height="12" fill="#edf2f7"/>
+  <text x="60" y="117" font-size="13" font-weight="600" fill="#2d3748">Chat</text>
+  <text x="580" y="117" text-anchor="end" font-size="11" fill="#718096">working steps · detailed</text>
+
+  <!-- user bubble -->
+  <rect x="420" y="150" width="150" height="30" rx="15" fill="#3182ce"/>
+  <text x="495" y="170" text-anchor="middle" font-size="12" fill="#ffffff">user: 继续提交插件市场吧</text>
+
+  <!-- opening narration -->
+  <rect x="60" y="150" width="300" height="30" rx="6" fill="#ebf8ff" stroke="#90cdf4"/>
+  <text x="72" y="170" font-size="12" fill="#2b6cb0">先确认 PR 状态，再补预构建 tarball…</text>
+  <text x="60" y="196" font-size="10" fill="#718096">opening note · before the first tool call</text>
+
+  <!-- tool rows -->
+  <rect x="88" y="206" width="250" height="24" rx="5" fill="#f7fafc" stroke="#e2e8f0"/>
+  <text x="98" y="222" font-size="11" fill="#4a5568">🔧 tool call · check PR state</text>
+  <rect x="88" y="234" width="250" height="24" rx="5" fill="#f7fafc" stroke="#e2e8f0"/>
+  <text x="98" y="250" font-size="11" fill="#4a5568">🔧 tool call · read registry docs</text>
+
+  <!-- mid narration -->
+  <rect x="60" y="272" width="360" height="30" rx="6" fill="#ebf8ff" stroke="#90cdf4"/>
+  <text x="72" y="292" font-size="12" fill="#2b6cb0">找到了 tarball 规则，先把 0.3.2 包上传…</text>
+  <text x="60" y="318" font-size="10" fill="#718096">hand-off note · between tool batches</text>
+
+  <!-- tool rows 2 -->
+  <rect x="88" y="328" width="280" height="24" rx="5" fill="#f7fafc" stroke="#e2e8f0"/>
+  <text x="98" y="344" font-size="11" fill="#4a5568">🔧 tool call · upload release asset</text>
+
+  <!-- final answer -->
+  <rect x="60" y="366" width="330" height="52" rx="8" fill="#f0fff4" stroke="#9ae6b4"/>
+  <text x="72" y="386" font-size="12" font-weight="600" fill="#276749">final answer</text>
+  <text x="72" y="404" font-size="11" fill="#2f855a">complete, standalone summary at the end of the turn</text>
+
+  <!-- prompt side -->
+  <rect x="640" y="92" width="240" height="352" rx="12" fill="#ffffff" stroke="#cbd5e0" stroke-width="1.5"/>
+  <text x="660" y="120" font-size="13" font-weight="600" fill="#2d3748">System prompt</text>
+
+  <rect x="660" y="140" width="200" height="80" rx="8" fill="#fffaf0" stroke="#f6ad55"/>
+  <text x="672" y="160" font-size="11" font-weight="600" fill="#975a16">narration:interim</text>
+  <text x="672" y="177" font-size="10" fill="#744210">order 8950 · "when / what / how"</text>
+  <text x="672" y="193" font-size="10" fill="#744210">contract: open first, then</text>
+  <text x="672" y="208" font-size="10" fill="#744210">one note per tool batch</text>
+
+  <rect x="660" y="240" width="200" height="66" rx="8" fill="#fffaf0" stroke="#f6ad55"/>
+  <text x="672" y="260" font-size="11" font-weight="600" fill="#975a16">narration:interim-reminder</text>
+  <text x="672" y="277" font-size="10" fill="#744210">order 10150 · short tail reminder</text>
+  <text x="672" y="292" font-size="10" fill="#744210">escalates when a step was silent</text>
+
+  <rect x="660" y="326" width="200" height="96" rx="8" fill="#ebf8ff" stroke="#90cdf4"/>
+  <text x="672" y="346" font-size="11" font-weight="600" fill="#2b6cb0">/narration</text>
+  <text x="672" y="363" font-size="10" fill="#2c5282">slash command (0.5.0)</text>
+  <text x="672" y="378" font-size="10" fill="#2c5282">style presets · on/off</text>
+  <text x="672" y="393" font-size="10" fill="#2c5282">display presets</text>
+  <text x="672" y="410" font-size="10" fill="#2c5282">writes through configForms</text>
+
+  <!-- arrows between prompt and chat -->
+  <line x1="640" y1="200" x2="620" y2="200" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="640" y1="270" x2="620" y2="270" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- timeline arrow -->
+  <line x1="80" y1="130" x2="80" y2="360" stroke="#2b6cb0" stroke-width="2" stroke-dasharray="4 4" marker-end="url(#arrowHot)"/>
+  <text x="30" y="250" font-size="11" fill="#2b6cb0" transform="rotate(-90 30 250)">turn time</text>
+</svg>
