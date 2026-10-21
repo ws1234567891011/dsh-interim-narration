@@ -18,6 +18,10 @@ import {
   resolveConfig,
   plainValues,
   buildSectionText,
+  analyzeAssistantMessage,
+  createNarrationTracker,
+  DEFAULT_ENFORCE,
+  DEFAULT_ESCALATE_AFTER,
   DEFAULT_ORDER,
   DEFAULT_MAX_SENTENCES,
   DEFAULT_MIN_TOOL_CALLS,
@@ -271,6 +275,150 @@ test('the English contract also opens with the plan', () => {
   )
 })
 
+// --- dynamic reminder (session events) ------------------------------------
+
+test('analyzeAssistantMessage separates narration from tool calls', () => {
+  assert.deepEqual(analyzeAssistantMessage({ content: [{ type: 'text', text: 'done' }] }), {
+    hasText: true,
+    toolCalls: 0,
+  })
+  assert.deepEqual(analyzeAssistantMessage({ content: [{ type: 'tool-call', id: 't1', name: 'read' }] }), {
+    hasText: false,
+    toolCalls: 1,
+  })
+  // Whitespace-only text is not narration.
+  assert.deepEqual(analyzeAssistantMessage({ content: [{ type: 'text', text: '  ' }, { type: 'tool-call' }] }), {
+    hasText: false,
+    toolCalls: 1,
+  })
+  // Reasoning blocks are not narration (the user cannot see them).
+  assert.deepEqual(analyzeAssistantMessage({ content: [{ type: 'reasoning', text: 'hmm' }] }), {
+    hasText: false,
+    toolCalls: 0,
+  })
+  assert.deepEqual(analyzeAssistantMessage(undefined), { hasText: false, toolCalls: 0 })
+})
+
+test('the tracker counts silent tool steps and resets on turn/start', () => {
+  const tracker = createNarrationTracker()
+  const session = { id: 's1' }
+  assert.equal(tracker.keyOf(session), 's1')
+  assert.equal(tracker.keyOf('s1'), 's1')
+  assert.equal(tracker.keyOf(undefined), undefined)
+  assert.equal(tracker.silentSteps(session), 0)
+
+  tracker.observe(session, { type: 'turn/start', data: { turn: 1 } })
+  tracker.observe(session, {
+    type: 'assistant/message',
+    data: { step: 1, message: { content: [{ type: 'tool-call', id: 'a' }] } },
+  })
+  assert.equal(tracker.silentSteps(session), 1)
+  tracker.observe(session, {
+    type: 'assistant/message',
+    data: { step: 2, message: { content: [{ type: 'tool-call', id: 'b' }] } },
+  })
+  assert.equal(tracker.silentSteps(session), 2)
+
+  // A narrated step clears the streak.
+  tracker.observe(session, {
+    type: 'assistant/message',
+    data: { step: 3, message: { content: [{ type: 'text', text: 'found it' }, { type: 'tool-call', id: 'c' }] } },
+  })
+  assert.equal(tracker.silentSteps(session), 0)
+
+  // A final answer (no tool calls) does not count at all.
+  tracker.observe(session, {
+    type: 'assistant/message',
+    data: { step: 4, message: { content: [{ type: 'text', text: 'all done' }] } },
+  })
+  assert.equal(tracker.silentSteps(session), 0)
+  assert.equal(tracker.silentSteps({ id: 'other' }), 0)
+})
+
+test('a silent tool step escalates the next reminder', () => {
+  const { ctx, sections, listeners } = fakeCtx()
+  apply(ctx, {})
+  const reminder = sections.find((candidate) => candidate.name === REMINDER_SECTION_NAME)
+  const onSessionEvent = listeners.get('session/event')
+  assert.equal(typeof onSessionEvent, 'function', 'plugin must track session events')
+  const session = { id: 's1' }
+
+  // Nothing silent yet: base reminder.
+  assert.doesNotMatch(reminder.text({ agent: { session } }), /上一步没有写过程叙述/)
+
+  onSessionEvent(session, { type: 'turn/start', data: { turn: 1 } })
+  onSessionEvent(session, {
+    type: 'assistant/message',
+    data: { step: 1, message: { content: [{ type: 'tool-call', id: 'a' }] } },
+  })
+  // The next model request sees the stronger reminder.
+  assert.match(reminder.text({ agent: { session } }), /上一步没有写过程叙述/)
+
+  // Two silent steps produce the blunter line.
+  onSessionEvent(session, {
+    type: 'assistant/message',
+    data: { step: 2, message: { content: [{ type: 'tool-call', id: 'b' }, { type: 'reasoning', text: 'x' }] } },
+  })
+  assert.match(reminder.text({ agent: { session } }), /连续 2 步没有过程叙述/)
+
+  // Speaking clears it for the following request.
+  onSessionEvent(session, {
+    type: 'assistant/message',
+    data: { step: 3, message: { content: [{ type: 'text', text: 'read two files' }, { type: 'tool-call', id: 'c' }] } },
+  })
+  assert.doesNotMatch(reminder.text({ agent: { session } }), /没有过程叙述/)
+
+  // A new turn starts clean again.
+  onSessionEvent(session, {
+    type: 'assistant/message',
+    data: { step: 4, message: { content: [{ type: 'tool-call', id: 'd' }] } },
+  })
+  onSessionEvent(session, { type: 'turn/start', data: { turn: 2 } })
+  assert.doesNotMatch(reminder.text({ agent: { session } }), /没有过程叙述/)
+})
+
+test('enforce: false and escalateAfter keep the reminder static', () => {
+  const { ctx, sections, listeners } = fakeCtx()
+  apply(ctx, { enforce: false })
+  const reminder = sections.find((candidate) => candidate.name === REMINDER_SECTION_NAME)
+  const emit = listeners.get('session/event')
+  const session = { id: 's1' }
+  emit(session, {
+    type: 'assistant/message',
+    data: { step: 1, message: { content: [{ type: 'tool-call', id: 'a' }] } },
+  })
+  assert.doesNotMatch(reminder.text({ agent: { session } }), /没有过程叙述/)
+
+  const second = fakeCtx()
+  apply(second.ctx, { escalateAfter: 2 })
+  const harder = second.sections.find((candidate) => candidate.name === REMINDER_SECTION_NAME)
+  const emit2 = second.listeners.get('session/event')
+  emit2(session, {
+    type: 'assistant/message',
+    data: { step: 1, message: { content: [{ type: 'tool-call', id: 'a' }] } },
+  })
+  assert.doesNotMatch(harder.text({ agent: { session } }), /没有过程叙述/, 'threshold 2 tolerates one silent step')
+  emit2(session, {
+    type: 'assistant/message',
+    data: { step: 2, message: { content: [{ type: 'tool-call', id: 'b' }] } },
+  })
+  assert.match(harder.text({ agent: { session } }), /连续 2 步没有过程叙述/)
+})
+
+test('the escalation line follows the reminder language', () => {
+  assert.match(buildReminderText(resolveConfig({ language: 'en' }), { silentSteps: 1 }), /called a tool without any narration/)
+  assert.match(buildReminderText(resolveConfig({ language: 'en' }), { silentSteps: 2 }), /2 consecutive steps carried no narration/)
+  assert.match(buildReminderText(resolveConfig({}), { silentSteps: 2 }), /再次提醒/)
+})
+
+test('a reminder text function with no session argument stays static', () => {
+  const { ctx, sections } = fakeCtx()
+  apply(ctx, {})
+  const reminder = sections.find((candidate) => candidate.name === REMINDER_SECTION_NAME)
+  assert.doesNotMatch(reminder.text(), /没有过程叙述/)
+  assert.doesNotMatch(reminder.text({}), /没有过程叙述/)
+})
+
 // --- language / overrides -------------------------------------------------
 
 test('language: en and order are applied', () => {
@@ -312,6 +460,8 @@ test('resolveConfig fills defaults', () => {
     ackSteering: true,
     announcePlan: DEFAULT_ANNOUNCE_PLAN,
     reminder: DEFAULT_REMINDER,
+    enforce: DEFAULT_ENFORCE,
+    escalateAfter: DEFAULT_ESCALATE_AFTER,
     text: undefined,
     extra: undefined,
     debug: false,
@@ -337,6 +487,10 @@ test('resolveConfig rejects bad values', () => {
     [{ ackSteering: 'no' }, /config\.ackSteering/],
     [{ announcePlan: 'yes' }, /config\.announcePlan/],
     [{ reminder: 'yes' }, /config\.reminder/],
+    [{ enforce: 'on' }, /config\.enforce/],
+    [{ escalateAfter: 0 }, /config\.escalateAfter/],
+    [{ escalateAfter: 6 }, /config\.escalateAfter/],
+    [{ escalateAfter: 1.5 }, /config\.escalateAfter/],
     [{ text: 1 }, /config\.text/],
     [{ extra: false }, /config\.extra/],
     [{ debug: 'on' }, /config\.debug/],
@@ -369,7 +523,7 @@ test('debug log records the mount and rotates oversized files', () => {
     const content = fs.readFileSync(logFile, 'utf8')
     assert.ok(content.length < 70 * 1024, 'log should have been rotated before writing')
     assert.match(content, /mounted order=8950 style=concise maxSentences=2 minToolCalls=1/)
-    assert.match(content, /reminder=true sectionChars=\d+ reminderChars=\d+/)
+    assert.match(content, /reminder=true enforce=true escalateAfter=1 sectionChars=\d+ reminderChars=\d+/)
     assert.match(content, /--- section text ---/)
     assert.match(content, /--- reminder text ---/)
   } finally {

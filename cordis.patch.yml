@@ -5,8 +5,10 @@
 # 这一行插入 profile 的配置树；行里的 config 就是插件配置的初始值。
 #
 # 图省事可以只改一次：下面的字段（enabled / style / maxSentences /
-# minToolCalls / language / debug / reportBlockers / ackSteering）都可以在
-# 「插件 → dsh-interim-narration → 配置」里直接改，保存后立即生效。
+# minToolCalls / language / debug / reportBlockers / ackSteering /
+# announcePlan / reminder / enforce / escalateAfter）都可以在
+# 「插件 → dsh-interim-narration → 配置」里直接改，保存后立即生效；
+# 同一页底部还能把「工作步骤展示 / 收起时机」一键调成过程全程可见。
 # 只有 order、text、extra、logFile 这类安装期选项才需要编辑本文件并重载。
 #
 # 安装（本地目录，未发布到 npm 时）：

@@ -5,7 +5,7 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
 [![npm](https://img.shields.io/npm/v/dsh-interim-narration.svg)](https://www.npmjs.com/package/dsh-interim-narration)
 
-> **English** — A tiny DeepSeek Harness plugin that makes the agent *think out loud*: every turn opens with how it understands the request and what it will do first, then short hand-off notes appear between batches of tool calls. The notes are ordinary assistant text, rendered in the live process timeline; since 0.3.2 a short reminder near the end of the system prompt keeps long turns from going silent. Zero runtime dependencies, no build step, and since 0.3.0 an optional in-app settings form edits the prompt knobs without touching YAML.
+> **English** — A tiny DeepSeek Harness plugin that makes the agent *think out loud*: every turn opens with how it understands the request and what it will do first, then short hand-off notes appear between batches of tool calls. The notes are ordinary assistant text, rendered in the live process timeline. Since 0.4.0 the plugin page also has a one-click *display* bridge (the process stays expanded instead of collapsing into a tool-call counter) and a mechanism-level safety net: if a tool step carried no narration, the end-of-prompt reminder gets sharper for the next step. Zero runtime dependencies, no build step, and an optional in-app settings form edits the prompt knobs without touching YAML.
 
 让 DeepSeek Harness 的 agent **边做边说**：每轮先说明自己怎么理解、准备怎么做、第一步是什么，然后在每一批工具调用之间用普通回复正文写一段过程叙述，而不是等全部做完才给一个最终答案。
 
@@ -36,6 +36,11 @@
 因为过程叙述是**正常 assistant 正文**，它可以出现在 DSH 的过程时间线里，但只有把「工作步骤展示」设置为保留/显示过程时你才看得到（见下）。
 
 从 0.3.0 起，插件还带一个**应用内配置页**：宿主半区导出 schemastery `Config`（可编辑字段声明为 `.volatile()`），客户端半区在「插件 → dsh-interim-narration → 配置」注册表单；保存后 loader 原地更新 volatile 引用，**下一轮提示词立即生效，无需重启**。尾部提醒段主要用于对抗长任务漂移：模型很容易在连续调工具时忘记叙述，所以把同一条要求在系统提示最后再放一遍。
+
+从 0.4.0 起有两处补强：
+
+- **显示桥接**：配置页底部多了「聊天里的显示」区块，直接绑定 Chat 自己的 `ui-chat` 设置（「工作步骤展示」与「收起时机」），另有一个「推荐：让过程全程可见」按钮一次设成「详细 + 下次有新消息时」。它只在用户点击时写入，不会自动改你的偏好；等价于「设置 → 通用 → 工作步骤展示」。
+- **机制级兜底**：宿主半区监听会话事件（`session/event`），跟踪每个会话「工具步骤是否带了正文」。如果某一步只调工具没说话，下一轮系统提示尾部的提醒会多出一句更明确的加压话术；连续静默两步则措辞更强硬。它只读事件、不写会话、不伪造消息，效果上限到提示词为止。
 
 ## 安装
 
@@ -91,15 +96,21 @@ cp -r <本目录> node_modules/dsh-interim-narration
 2. 点该行的 **配置** 按钮，进入表单页；
 3. 改完点 **保存**。保存会写入当前 profile 的 `cordis.patch.yml`，并**立即生效**（下一轮对话的系统提示词就带新配置；无需重启、无需刷新）。
 
-表单里可以改：`enabled`、`style`、`maxSentences`、`minToolCalls`、`language`、`debug`、`reportBlockers`、`ackSteering`、`announcePlan`、`reminder`。
+表单里可以改：`enabled`、`style`、`maxSentences`、`minToolCalls`、`language`、`debug`、`reportBlockers`、`ackSteering`、`announcePlan`、`reminder`、`enforce`、`escalateAfter`。
 其余字段（`order`、`text`、`extra`、`logFile`）属于安装期配置，仍需编辑 profile patch 或重新安装后生效。
+页面底部的「聊天里的显示」区块可以顺手把「工作步骤展示 / 收起时机」调好（见下一节）。
 
 > 说明：这个表单走的是 DSH 官方设置通道（`plugins.row.config` 插槽 + `configForms` 服务 + 宿主 `settings` 服务），
 > 保存语义与官方插件配置页一致（CAS 版本校验、只写 volatile 字段、写当前 profile patch）。
 
 ## 让过程叙述真的可见
 
-插件只负责"让模型愿意说"，能否看到还取决于聊天设置：
+插件只负责"让模型愿意说"，能否看到还取决于聊天设置。0.4.0 起最省事的办法：
+
+1. 侧边栏 **插件** → **dsh-interim-narration** → **配置**；
+2. 底部「聊天里的显示」点 **推荐：让过程全程可见**（=「详细」+「下次有新消息时」）。
+
+等价的手动设置：
 
 1. 设置 → 通用 → **工作步骤展示**：选 **详细** 或 **完全展开**；
 2. 同页 **工作步骤收起时机**：选 **下次有新消息时**（否则每次回答结束过程组会立即收起，你只会看到「已完成，用时 …」这一行）；
@@ -134,12 +145,14 @@ cp -r <本目录> node_modules/dsh-interim-narration
 | `ackSteering` | `true` | 是否要求用户中途插话时先回应一句再继续 |
 | `announcePlan` | `true` | 是否要求每轮开场（首次工具调用前）先说理解、计划与第一步；关掉只去掉开场要求 |
 | `reminder` | `true` | 是否在系统提示尾部再放一条短提醒（约 126 字符），防止长任务里只顾调工具、不说话 |
+| `enforce` | `true` | 机制级兜底：监听会话事件，某一步只调工具没写正文时，让下一步的尾部提醒加压；关掉则提醒保持静态 |
+| `escalateAfter` | `1` | 连续静默几步后开始加压（1–5）；`1` 最积极，调大可容忍更长的静默段 |
 | `text` | 无 | 完全替换内置文案 |
 | `extra` | 无 | 追加到内置文案（或 `text`）之后的自定义要求 |
 | `debug` | `false` | 写挂载日志，便于确认插件真的生效（超过 64 KiB 会自动清空重写） |
 | `logFile` | `$DSH_HOME/dsh-interim-narration.log` | debug 日志路径 |
 
-其中 `enabled`、`style`、`maxSentences`、`minToolCalls`、`language`、`debug`、`reportBlockers`、`ackSteering`、`announcePlan`、`reminder`
+其中 `enabled`、`style`、`maxSentences`、`minToolCalls`、`language`、`debug`、`reportBlockers`、`ackSteering`、`announcePlan`、`reminder`、`enforce`、`escalateAfter`
 是 **volatile** 字段，可在应用内表单修改并立即生效；`order`、`text`、`extra`、`logFile` 需要改 patch（重载后生效）。
 
 ### 三档预设
@@ -153,9 +166,10 @@ cp -r <本目录> node_modules/dsh-interim-narration
 ## 验证是否生效
 
 - 把 `config.debug` 设为 `true`（应用内配置页也能开），查看 `~/.dsh/dsh-interim-narration.log`，应出现
-  `mounted order=8950 style=standard maxSentences=3 minToolCalls=2 enabled=true reminder=true sectionChars=<n> reminderChars=<n>`，
+  `mounted order=8950 style=standard maxSentences=3 minToolCalls=2 enabled=true reminder=true enforce=true escalateAfter=1 sectionChars=<n> reminderChars=<n>`，
   以及 `--- section text ---` 与 `--- reminder text ---` 两段正文；
   在配置页保存后，同一文件会出现 `volatile-update paths=… enabled=true style=… sectionChars=…`（说明引用被原地更新）；
+  开启 `enforce` 且某一步只调工具没写正文时，还会出现 `reminder-escalated silentSteps=… escalateAfter=… session=…`，表示下一步的尾部提醒已加压；
 - 或让 agent 回答："原样输出系统提示里以『## 过程叙述』开头的那一段"。
 
 ## 代价
@@ -180,7 +194,7 @@ dsh-interim-narration/
 │   ├── index.js       # schemastery Config（volatile 可编辑字段）与公共导出
 │   └── client.js      # 手写 Web bundle（window.__ModuleLoader__.load）注册配置页
 ├── test/
-│   ├── smoke.mjs            # 宿主逻辑断言（27 个用例）
+│   ├── smoke.mjs            # 宿主逻辑断言（33 个用例）
 │   ├── client-smoke.mjs     # 客户端 bundle 注册/渲染断言
 │   ├── mock-llm.mjs         # 本地 OpenAI 兼容 mock，用于端到端验证
 │   └── overlay-mock.example.yml
@@ -195,6 +209,7 @@ dsh-interim-narration/
 
 - 需要 DSH `0.2.x`（`0.2.1-rc.2` 上验证）；插件只依赖宿主注入的 `systemPrompt` 服务，客户端半区依赖 `slots` / `locale` / `configForms` 三个内建服务。
 - `announcePlan` 等应用内配置页需要 DSH `0.2.x` 的设置服务（`plugins.row.config` + `configForms`）；更老的宿主上插件仍可工作，只是没有表单。
+- 0.4.0 的机制级兜底会监听根上下文的 `session/event`（`turn/start`、`assistant/message`）来数「静默步数」；宿主不提供该事件时状态机保持 0，插件退化为纯提示词模式，其余功能不受影响。
 - 运行时不需要任何 npm 依赖；`@deepseek-ai/schemastery` 是宿主提供的 optional peer，只用于声明 `Config`。
 
 ## 贡献
@@ -207,7 +222,7 @@ dsh-interim-narration/
 node test/smoke.mjs
 ```
 
-27 个用例覆盖：插件形状、默认段 order/interpolate/文案、每轮开场要求（`announcePlan` 默认开启/关闭时只去掉开场行/简单任务仍保留开场）、`style` 预设与显式覆盖、`minToolCalls` 阈值、`reportBlockers`/`ackSteering` 开关、`enabled: false` 时文本为空、`language`/`order` 生效、`text`+`extra` 覆盖、空 `text` 回退内置文案、volatile 引用懒读取（保存后立即变化）、`plainValues` 解包、配置默认值与 20 余种非法值、正文非空且无模板泄漏、debug 日志写入与超限轮转、坏日志路径不影响挂载、volatile 更新日志行；以及提醒段的注册/顺序/开关/英文版与主契约的「禁止全程静默」硬性要求。
+33 个用例覆盖：插件形状、默认段 order/interpolate/文案、每轮开场要求（`announcePlan` 默认开启/关闭时只去掉开场行/简单任务仍保留开场）、`style` 预设与显式覆盖、`minToolCalls` 阈值、`reportBlockers`/`ackSteering` 开关、`enabled: false` 时文本为空、`language`/`order` 生效、`text`+`extra` 覆盖、空 `text` 回退内置文案、volatile 引用懒读取（保存后立即变化）、`plainValues` 解包、配置默认值与 20 余种非法值、正文非空且无模板泄漏、debug 日志写入与超限轮转、坏日志路径不影响挂载、volatile 更新日志行；提醒段的注册/顺序/开关/英文版与主契约的「禁止全程静默」硬性要求；以及 0.4.0 的静默步跟踪（`analyzeAssistantMessage` 区分正文与工具块、`turn/start` 重置、静默一步/多步的加压文案、开口后清零、`enforce` 关闭或未达阈值时保持静态、无会话信息时不升级）。
 
 代码分两层：`lib/core.js` 是纯逻辑 + 挂载（只 import Node 内置模块，可独立测试），`lib/index.js` 只声明 schemastery `Config` 并转出。`lib/client.js` 是手写的客户端 bundle（`window.__ModuleLoader__.load`），注册「插件 → 本插件 → 配置」表单。
 
