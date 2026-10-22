@@ -46,7 +46,7 @@ const snapshot = {
   value: {
     enabled: true,
     style: 'standard',
-    maxSentences: 3,
+    maxSentences: 0,
     minToolCalls: 2,
     language: 'auto',
     debug: false,
@@ -158,7 +158,11 @@ const container = rendered.type(rendered.props)
 assert.equal(container.type, 'div', 'settings component must render a container element')
 
 const tree = JSON.stringify(container)
-assert.ok(tree.includes('visibilityTitle'), 'page must render the display block')
+assert.ok(tree.includes('visibilityTitle') || tree.includes('sectionDisplay'), 'page must render the display block')
+assert.ok(tree.includes('sectionBasic'), 'page must group the basics')
+assert.ok(tree.includes('sectionPrompt'), 'page must group the opening and reminder toggles')
+assert.ok(tree.includes('sectionAdvanced'), 'page must group the advanced fields')
+assert.ok(tree.includes('maxSentencesFollow'), 'a zero sentence budget must explain that the preset decides')
 assert.ok(tree.includes('visibilityNote'), 'display block must explain the settings equivalent')
 assert.ok(tree.includes('presetVisible'), 'display block must offer the recommended preset')
 assert.ok(tree.includes('enforce'), 'page must expose the enforcement toggle')
@@ -185,6 +189,12 @@ assert.ok(
   ])),
   'display control must mutate ui-chat with the live revision',
 )
+
+const maxSentencesInput = findNodes(
+  container,
+  (node) => node.type === 'input' && node.props?.type === 'number' && node.props?.min === 0,
+)[0]
+assert.ok(maxSentencesInput, 'the sentence budget input must allow 0 (follow the preset)')
 
 // The preset button writes both display fields in one save.
 const presetButton = findNodes(
@@ -260,7 +270,7 @@ assert.ok(resetButtons.length >= 12, 'every editable field must offer a reset bu
 await resetButtons[0].props.onClick()
 assert.ok(
   calls.some(([k, ops]) => k === 'mutate' && JSON.stringify(ops) === JSON.stringify([
-    { op: 'unset', path: ['style'] },
+    { op: 'unset', path: ['enabled'] },
   ])),
   'reset must send an unset op for that field',
 )

@@ -9,6 +9,8 @@
 # announcePlan / reminder / enforce / escalateAfter）都可以在
 # 「插件 → dsh-interim-narration → 配置」里直接改，保存后立即生效；
 # 同一页底部还能把「工作步骤展示 / 收起时机」一键调成过程全程可见。
+# 0.6.0 起：maxSentences 填 0 表示跟随档位（2/3/5 句），language 填 auto
+# 会跟随你最近一条消息的语言；表单按「基本 / 开场与提醒 / 进阶 / 聊天里的显示」分区。
 # 只有 order、text、extra、logFile 这类安装期选项才需要编辑本文件并重载。
 #
 # 安装（本地目录，未发布到 npm 时）：

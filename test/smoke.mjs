@@ -19,7 +19,10 @@ import {
   plainValues,
   buildSectionText,
   analyzeAssistantMessage,
+  analyzeUserMessage,
   createNarrationTracker,
+  detectLanguage,
+  resolveLanguage,
   DEFAULT_ENFORCE,
   DEFAULT_ESCALATE_AFTER,
   DEFAULT_ORDER,
@@ -29,6 +32,7 @@ import {
   DEFAULT_ANNOUNCE_PLAN,
   DEFAULT_REMINDER,
   DEFAULT_REMINDER_ORDER,
+  MAX_TRACKED_SESSIONS,
   REMINDER_SECTION_NAME,
   STYLES,
   SECTION_NAME,
@@ -476,7 +480,7 @@ test('resolveConfig rejects bad values', () => {
     [{ order: Number.NaN }, /config\.order/],
     [{ order: Infinity }, /config\.order/],
     [{ style: 'fancy' }, /config\.style/],
-    [{ maxSentences: 0 }, /config\.maxSentences/],
+    [{ maxSentences: -1 }, /config\.maxSentences/],
     [{ maxSentences: 11 }, /config\.maxSentences/],
     [{ maxSentences: 2.5 }, /config\.maxSentences/],
     [{ minToolCalls: -1 }, /config\.minToolCalls/],
@@ -508,6 +512,83 @@ test('buildSectionText never returns an empty contract', () => {
     assert.ok(text.endsWith('\n'))
     assert.doesNotMatch(text, /\n\n\n/)
   }
+})
+
+// --- v0.6.0: language, style-linked budget, bounded state -----------------
+
+test('maxSentences 0 follows the style budget', () => {
+  assert.equal(resolveConfig({}).maxSentences, 3, 'the default follows standard')
+  assert.equal(resolveConfig({ style: 'concise', maxSentences: 0 }).maxSentences, 2)
+  assert.equal(resolveConfig({ style: 'verbose', maxSentences: 0 }).maxSentences, 5)
+  assert.equal(resolveConfig({ style: 'verbose', maxSentences: 2 }).maxSentences, 2, 'an explicit value wins')
+  assert.match(buildSectionText(resolveConfig({ style: 'verbose', maxSentences: 0 })), /1–5 句/)
+})
+
+test('language detection follows the user text', () => {
+  assert.equal(detectLanguage('请帮我检查一下这个文件的改动'), 'zh')
+  assert.equal(detectLanguage('Please review the changes and summarize them for me'), 'en')
+  assert.equal(detectLanguage('ok'), undefined)
+  assert.equal(detectLanguage(''), undefined)
+  assert.equal(detectLanguage(undefined), undefined)
+  assert.equal(analyzeUserMessage({ role: 'user', content: [{ type: 'text', text: ' hello ' }] }), 'hello')
+  assert.equal(analyzeUserMessage(' plain '), 'plain')
+  assert.equal(analyzeUserMessage({ content: [{ type: 'tool-result', text: 'x' }] }), '')
+  assert.equal(resolveLanguage(resolveConfig({ language: 'en' }), 'zh'), 'en')
+  assert.equal(resolveLanguage(resolveConfig({ language: 'zh' }), 'en'), 'zh')
+  assert.equal(resolveLanguage(resolveConfig({ language: 'auto' }), 'en'), 'en')
+  assert.equal(resolveLanguage(resolveConfig({ language: 'auto' }), undefined), 'zh')
+})
+
+test('language: auto follows the session user messages', () => {
+  const { ctx, sections, listeners } = fakeCtx()
+  apply(ctx, { language: 'auto' })
+  const section = sections.find((candidate) => candidate.name === SECTION_NAME)
+  const reminder = sections.find((candidate) => candidate.name === REMINDER_SECTION_NAME)
+  const emit = listeners.get('session/event')
+  const session = { id: 'lang-1' }
+  assert.match(section.text({ agent: { session } }), /## 过程叙述/)
+
+  emit(session, {
+    type: 'user/message',
+    data: {
+      message: { role: 'user', content: [{ type: 'text', text: 'Please explain what you are doing in English.' }] },
+    },
+  })
+  assert.match(section.text({ agent: { session } }), /## Interim narration/)
+  assert.match(reminder.text({ agent: { session } }), /## Narration reminder/)
+
+  emit(session, {
+    type: 'user/message',
+    data: { message: { role: 'user', content: [{ type: 'text', text: '继续用中文说明' }] } },
+  })
+  assert.match(section.text({ agent: { session } }), /## 过程叙述/)
+})
+
+test('the tracker remembers the user language across turns', () => {
+  const tracker = createNarrationTracker()
+  const session = { id: 's-lang' }
+  tracker.observe(session, {
+    type: 'user/message',
+    data: { message: { role: 'user', content: [{ type: 'text', text: 'Use English please, thanks a lot.' }] } },
+  })
+  assert.equal(tracker.language(session), 'en')
+  tracker.observe(session, { type: 'turn/start', data: { turn: 2 } })
+  assert.equal(tracker.language(session), 'en', 'a new turn keeps the language')
+  tracker.observe(session, {
+    type: 'user/message',
+    data: { message: { role: 'user', content: [{ type: 'text', text: '现在请用中文继续说' }] } },
+  })
+  assert.equal(tracker.language(session), 'zh')
+  assert.equal(tracker.language({ id: 'unknown' }), undefined)
+})
+
+test('tracker state stays bounded across many sessions', () => {
+  const tracker = createNarrationTracker()
+  for (let index = 0; index <= MAX_TRACKED_SESSIONS + 9; index += 1) {
+    tracker.observe({ id: `session-${index}` }, { type: 'turn/start', data: { turn: 1 } })
+  }
+  assert.equal(tracker.state({ id: 'session-0' }).turn, 0, 'the oldest state was evicted')
+  assert.equal(tracker.state({ id: `session-${MAX_TRACKED_SESSIONS + 9}` }).turn, 1)
 })
 
 // --- debug logging --------------------------------------------------------
