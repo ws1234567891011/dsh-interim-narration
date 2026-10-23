@@ -230,7 +230,8 @@ dsh-interim-narration/
 
 ## 兼容性
 
-- 需要 DSH `0.2.x`（`0.2.1-rc.2` 上验证）；插件只依赖宿主注入的 `systemPrompt` 服务，客户端半区依赖 `slots` / `locale` / `configForms` 三个内建服务。
+- 需要 DSH `0.2.x`（`0.2.1-rc.2` 上验证）；`package.json` 用机器可读声明写明了这一点：`dsh.engines.dsh: ">=0.2.1-rc.0 <0.3.0"`，插件管理器会在安装/启用前据此检查宿主版本（不满足时会提示授予 exemption）。
+- 插件只依赖宿主注入的 `systemPrompt` 服务，客户端半区依赖 `slots` / `locale` / `configForms` 三个内建服务。
 - `/narration` 命令额外依赖 `commandUi` 服务，缺失时命令自动跳过，其余功能不受影响。
 - `announcePlan` 等应用内配置页需要 DSH `0.2.x` 的设置服务（`plugins.row.config` + `configForms`）；更老的宿主上插件仍可工作，只是没有表单。
 - 0.4.0 的机制级兜底会监听根上下文的 `session/event`（`turn/start`、`assistant/message`）来数「静默步数」；宿主不提供该事件时状态机保持 0，插件退化为纯提示词模式，其余功能不受影响。

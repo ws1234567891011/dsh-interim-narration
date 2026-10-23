@@ -155,7 +155,7 @@ dsh-interim-narration/
 
 ## Compatibility
 
-- DSH `0.2.x` (verified on `0.2.1-rc.2`). The host half only needs the `systemPrompt` service; the client half uses `slots` / `locale` / `configForms` and optionally `commandUi`.
+- DSH `0.2.x` (verified on `0.2.1-rc.2`). The manifest says so in machine-readable form: `dsh.engines.dsh: ">=0.2.1-rc.0 <0.3.0"`, so the plugin manager checks the host version before installing or enabling (an unsatisfied range surfaces an exemption prompt). The host half only needs the `systemPrompt` service; the client half uses `slots` / `locale` / `configForms` and optionally `commandUi`.
 - Without the settings services the plugin still works; you just lose the form.
 - Since 0.6.0 `language: auto` needs the user-message text from `session/event`; without that event it falls back to Chinese (the 0.5 behaviour), and explicit `zh`/`en` are unaffected.
 - No runtime dependencies. `@deepseek-ai/schemastery` is an optional host-provided peer used only to declare `Config`.

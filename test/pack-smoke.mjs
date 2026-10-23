@@ -50,5 +50,7 @@ assert.ok(Array.isArray(manifest.dsh.client.inject), 'dsh.client.inject must be 
 assert.ok(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-commands'), 'client half must declare the command service')
 assert.ok(manifest.exports?.['./client'], 'exports["./client"] must be published')
 assert.ok(manifest.engines?.node, 'engines.node must be published')
+assert.ok(manifest.dsh?.engines?.dsh, 'dsh.engines.dsh must be published')
+assert.match(String(manifest.dsh.engines.dsh), /^>=0\.2\.1-rc\.0\s+<0\.3\.0$/, 'dsh.engines.dsh must pin the supported host line')
 
 console.log(`pack smoke: ${files.length} files, ${report.unpackedSize} unpacked bytes, manifest ok`)
