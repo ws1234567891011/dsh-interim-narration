@@ -124,6 +124,16 @@ Or simply ask the agent: "repeat verbatim the system-prompt section that starts 
 
 Narration is extra output tokens (usually tens to ~100 per tool batch); `enabled: false` turns it off instantly.
 
+## Cache impact (prompt cache)
+
+- The plugin keeps no cache of its own and never touches host cache files; it only changes two blocks of the system prompt.
+- The main contract block (~950 characters) is static while the config is stable: the first request in a conversation pays for it, later ones hit the cache and are billed at the cached rate.
+- The trailing reminder is dynamic: with `enforce` on, a silent tool step appends one line. Since 0.7.0 that line is **latched for the whole turn** — the prompt stays byte-identical while silence continues and only flips on the first trigger and on the next narrated turn, so it stops invalidating the prefix on every silent step.
+- `language: auto` switches the template with the conversation language; a switch rewrites the system-prompt prefix, so the provider's prefix cache breaks at the system prompt and that request's history is re-prefilled.
+- Saving any settings field also rewrites the prefix for the next request — one invalidation per save.
+- To maximise cache hits: pin `language` to `zh` or `en`, disable `enforce` or raise `escalateAfter` when you do not need the safety net, and avoid editing settings mid-conversation.
+- For the underlying mechanics see DSH's `llm-pi-ai` docs, "KV Cache impact": providers reuse by request prefix, and any change to earlier content ends reuse at that point.
+
 ## Uninstall
 
 ```bash

@@ -1,7 +1,7 @@
 {
   "name": "dsh-interim-narration",
-  "version": "0.6.1",
-  "description": "让 DeepSeek Harness 的 agent 每轮先讲理解与计划、在工具调用之间用正文写过程叙述（边做边说），在「插件 → 本插件 → 配置」里直接调整参数并可一键让过程全程可见；系统提示末尾还有短提醒，静默的步骤会自动加压，长任务也不会只顾调工具不说话；0.5 起支持 /narration 快捷命令与单字段/整体恢复默认；0.6 起 language auto 跟随消息语言、句数跟随档位、配置页分区且会话状态有界",
+  "version": "0.7.0",
+  "description": "让 DeepSeek Harness 的 agent 每轮先讲理解与计划、在工具调用之间用正文写过程叙述（边做边说），在「插件 → 本插件 → 配置」里直接调整参数并可一键让过程全程可见；系统提示末尾还有短提醒，静默的步骤会自动加压，长任务也不会只顾调工具不说话；0.5 起支持 /narration 快捷命令与单字段/整体恢复默认；0.6 起 language auto 跟随消息语言、句数跟随档位、配置页分区且会话状态有界；0.7 起加压提醒固定文案并整轮粘住，减少 prompt cache 失效，并补充缓存影响说明",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

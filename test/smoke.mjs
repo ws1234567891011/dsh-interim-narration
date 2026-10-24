@@ -348,37 +348,44 @@ test('a silent tool step escalates the next reminder', () => {
   const session = { id: 's1' }
 
   // Nothing silent yet: base reminder.
-  assert.doesNotMatch(reminder.text({ agent: { session } }), /上一步没有写过程叙述/)
+  assert.doesNotMatch(reminder.text({ agent: { session } }), /注意：本轮出现过/)
 
   onSessionEvent(session, { type: 'turn/start', data: { turn: 1 } })
   onSessionEvent(session, {
     type: 'assistant/message',
     data: { step: 1, message: { content: [{ type: 'tool-call', id: 'a' }] } },
   })
-  // The next model request sees the stronger reminder.
-  assert.match(reminder.text({ agent: { session } }), /上一步没有写过程叙述/)
+  // The next model request sees the latched escalation line.
+  assert.match(reminder.text({ agent: { session } }), /注意：本轮出现过/)
 
-  // Two silent steps produce the blunter line.
+  // Further silent steps must not rewrite the reminder, so the prompt cache
+  // stays reusable while the streak continues.
+  const escalated = reminder.text({ agent: { session } })
   onSessionEvent(session, {
     type: 'assistant/message',
     data: { step: 2, message: { content: [{ type: 'tool-call', id: 'b' }, { type: 'reasoning', text: 'x' }] } },
   })
-  assert.match(reminder.text({ agent: { session } }), /连续 2 步没有过程叙述/)
+  assert.equal(
+    reminder.text({ agent: { session } }),
+    escalated,
+    'the escalation text must stay identical while the streak continues',
+  )
 
-  // Speaking clears it for the following request.
+  // Speaking does not rewrite the reminder mid-turn: the line stays latched for
+  // the rest of the turn so the prompt cache is not invalidated again.
   onSessionEvent(session, {
     type: 'assistant/message',
     data: { step: 3, message: { content: [{ type: 'text', text: 'read two files' }, { type: 'tool-call', id: 'c' }] } },
   })
-  assert.doesNotMatch(reminder.text({ agent: { session } }), /没有过程叙述/)
+  assert.equal(reminder.text({ agent: { session } }), escalated, 'a narrated step keeps the latched line')
 
-  // A new turn starts clean again.
+  // The next turn starts clean once the model spoke during the previous one.
   onSessionEvent(session, {
     type: 'assistant/message',
     data: { step: 4, message: { content: [{ type: 'tool-call', id: 'd' }] } },
   })
   onSessionEvent(session, { type: 'turn/start', data: { turn: 2 } })
-  assert.doesNotMatch(reminder.text({ agent: { session } }), /没有过程叙述/)
+  assert.doesNotMatch(reminder.text({ agent: { session } }), /注意：本轮出现过/)
 })
 
 test('enforce: false and escalateAfter keep the reminder static', () => {
@@ -391,7 +398,7 @@ test('enforce: false and escalateAfter keep the reminder static', () => {
     type: 'assistant/message',
     data: { step: 1, message: { content: [{ type: 'tool-call', id: 'a' }] } },
   })
-  assert.doesNotMatch(reminder.text({ agent: { session } }), /没有过程叙述/)
+  assert.doesNotMatch(reminder.text({ agent: { session } }), /注意：本轮出现过/)
 
   const second = fakeCtx()
   apply(second.ctx, { escalateAfter: 2 })
@@ -401,18 +408,22 @@ test('enforce: false and escalateAfter keep the reminder static', () => {
     type: 'assistant/message',
     data: { step: 1, message: { content: [{ type: 'tool-call', id: 'a' }] } },
   })
-  assert.doesNotMatch(harder.text({ agent: { session } }), /没有过程叙述/, 'threshold 2 tolerates one silent step')
+  assert.doesNotMatch(harder.text({ agent: { session } }), /注意：本轮出现过/, 'threshold 2 tolerates one silent step')
   emit2(session, {
     type: 'assistant/message',
     data: { step: 2, message: { content: [{ type: 'tool-call', id: 'b' }] } },
   })
-  assert.match(harder.text({ agent: { session } }), /连续 2 步没有过程叙述/)
+  assert.match(harder.text({ agent: { session } }), /注意：本轮出现过/)
 })
 
-test('the escalation line follows the reminder language', () => {
-  assert.match(buildReminderText(resolveConfig({ language: 'en' }), { silentSteps: 1 }), /called a tool without any narration/)
-  assert.match(buildReminderText(resolveConfig({ language: 'en' }), { silentSteps: 2 }), /2 consecutive steps carried no narration/)
-  assert.match(buildReminderText(resolveConfig({}), { silentSteps: 2 }), /再次提醒/)
+test('the escalation line follows the reminder language and stays identical', () => {
+  const en = resolveConfig({ language: 'en' })
+  assert.doesNotMatch(buildReminderText(en, { silentSteps: 0 }), /called a tool without any narration/)
+  const once = buildReminderText(en, { silentSteps: 1 })
+  const twice = buildReminderText(en, { silentSteps: 2 })
+  assert.match(once, /called a tool without any narration/)
+  assert.equal(once, twice, 'the escalation must not change while the streak continues')
+  assert.match(buildReminderText(resolveConfig({}), { silentSteps: 1 }), /注意：本轮出现过/)
 })
 
 test('a reminder text function with no session argument stays static', () => {
