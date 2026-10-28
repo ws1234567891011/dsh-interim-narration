@@ -3,6 +3,7 @@
 // page while the settings namespace is served.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { buildPreview as hostBuildPreview, resolveConfig as hostResolveConfig } from '../lib/core.js'
 
 const clientPath = new URL('../lib/client.js', import.meta.url)
 const source = readFileSync(clientPath, 'utf8')
@@ -46,6 +47,7 @@ const snapshot = {
   value: {
     enabled: true,
     style: 'standard',
+    contract: 'full',
     maxSentences: 0,
     minToolCalls: 2,
     language: 'auto',
@@ -167,6 +169,39 @@ assert.ok(tree.includes('visibilityNote'), 'display block must explain the setti
 assert.ok(tree.includes('presetVisible'), 'display block must offer the recommended preset')
 assert.ok(tree.includes('enforce'), 'page must expose the enforcement toggle')
 
+// --- v0.8.0: contract preset and prompt preview -----------------------------
+assert.ok(tree.includes('contract'), 'page must expose the prompt contract preset')
+assert.ok(tree.includes('previewTitle'), 'page must render the prompt preview block')
+assert.ok(tree.includes('previewMeta'), 'preview must show a size estimate')
+assert.ok(
+  findNodes(container, (node) => node.type === 'pre').length === 1,
+  'preview must render one preformatted prompt body',
+)
+const contractSelect = findNodes(
+  container,
+  (node) => node.type === 'select' && (node.children ?? []).some((child) => child?.props?.value === 'full'),
+)[0]
+assert.ok(contractSelect, 'contract select must render')
+assert.equal(contractSelect.props.value, 'full', 'contract select must show the current value')
+
+// The preview must equal the host's builders for every interesting config.
+const matrix = [
+  {},
+  { style: 'concise' },
+  { style: 'verbose', maxSentences: 2 },
+  { contract: 'compact' },
+  { contract: 'compact', language: 'en' },
+  { language: 'en', announcePlan: false },
+  { enabled: false },
+  { reminder: false },
+  { reportBlockers: false, ackSteering: false },
+]
+for (const raw of matrix) {
+  const local = moduleExports.__preview(raw)
+  const host = hostBuildPreview(hostResolveConfig(raw))
+  assert.deepEqual(local, host, `preview drifted from the host for ${JSON.stringify(raw)}`)
+}
+
 // Changing a display select writes the Chat namespace through the settings
 // service, not the plugin namespace.
 function findNodes(node, predicate, found = []) {
@@ -178,7 +213,7 @@ function findNodes(node, predicate, found = []) {
 }
 const chatSelects = findNodes(
   container,
-  (node) => node.type === 'select' && (node.children ?? []).some((child) => child?.props?.value === 'compact'),
+  (node) => node.type === 'select' && (node.children ?? []).some((child) => child?.props?.value === 'detailed'),
 )
 assert.equal(chatSelects.length, 1, 'expected the transcriptView select to render')
 assert.equal(chatSelects[0].props.value, 'standard', 'transcriptView select must show the current value')
@@ -266,7 +301,7 @@ const resetButtons = findNodes(
   container,
   (node) => node.type === 'button' && String(node.props?.title ?? '').endsWith('resetField'),
 )
-assert.ok(resetButtons.length >= 12, 'every editable field must offer a reset button')
+assert.ok(resetButtons.length >= 13, 'every editable field must offer a reset button')
 await resetButtons[0].props.onClick()
 assert.ok(
   calls.some(([k, ops]) => k === 'mutate' && JSON.stringify(ops) === JSON.stringify([
@@ -281,7 +316,7 @@ const resetAllButton = findNodes(
 assert.ok(resetAllButton, 'reset-all button must exist')
 await resetAllButton.props.onClick()
 assert.ok(
-  calls.some(([k, ops]) => k === 'mutate' && Array.isArray(ops) && ops.length === 12 && ops.every((op) => op.op === 'unset')),
+  calls.some(([k, ops]) => k === 'mutate' && Array.isArray(ops) && ops.length === 13 && ops.every((op) => op.op === 'unset')),
   'reset-all must unset all editable fields at once',
 )
 

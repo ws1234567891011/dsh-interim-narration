@@ -18,6 +18,7 @@ import {
   resolveConfig,
   plainValues,
   buildSectionText,
+  buildPreview,
   analyzeAssistantMessage,
   analyzeUserMessage,
   createNarrationTracker,
@@ -25,6 +26,7 @@ import {
   resolveLanguage,
   DEFAULT_ENFORCE,
   DEFAULT_ESCALATE_AFTER,
+  DEFAULT_CONTRACT,
   DEFAULT_ORDER,
   DEFAULT_MAX_SENTENCES,
   DEFAULT_MIN_TOOL_CALLS,
@@ -468,6 +470,7 @@ test('resolveConfig fills defaults', () => {
     enabled: true,
     order: DEFAULT_ORDER,
     style: DEFAULT_STYLE,
+    contract: DEFAULT_CONTRACT,
     maxSentences: DEFAULT_MAX_SENTENCES,
     minToolCalls: DEFAULT_MIN_TOOL_CALLS,
     language: 'auto',
@@ -501,6 +504,7 @@ test('resolveConfig rejects bad values', () => {
     [{ reportBlockers: 1 }, /config\.reportBlockers/],
     [{ ackSteering: 'no' }, /config\.ackSteering/],
     [{ announcePlan: 'yes' }, /config\.announcePlan/],
+    [{ contract: 'fancy' }, /config\.contract/],
     [{ reminder: 'yes' }, /config\.reminder/],
     [{ enforce: 'on' }, /config\.enforce/],
     [{ escalateAfter: 0 }, /config\.escalateAfter/],
@@ -533,6 +537,34 @@ test('maxSentences 0 follows the style budget', () => {
   assert.equal(resolveConfig({ style: 'verbose', maxSentences: 0 }).maxSentences, 5)
   assert.equal(resolveConfig({ style: 'verbose', maxSentences: 2 }).maxSentences, 2, 'an explicit value wins')
   assert.match(buildSectionText(resolveConfig({ style: 'verbose', maxSentences: 0 })), /1–5 句/)
+})
+
+test('the compact contract keeps every rule in fewer characters', () => {
+  const full = buildSectionText(resolveConfig({ contract: 'full' }))
+  const compact = buildSectionText(resolveConfig({ contract: 'compact' }))
+  assert.ok(
+    compact.length < full.length * 0.6,
+    `compact (${compact.length}) should be much shorter than full (${full.length})`,
+  )
+  assert.match(compact, /## 过程叙述/)
+  assert.match(compact, /硬性要求/)
+  assert.match(compact, /开场/)
+  assert.match(compact, /1–3 句/)
+  const compactEn = buildSectionText(resolveConfig({ contract: 'compact', language: 'en' }))
+  assert.match(compactEn, /## Interim narration/)
+  assert.match(compactEn, /Hard requirement/)
+})
+
+test('buildPreview reports both texts and a size estimate', () => {
+  const config = resolveConfig({})
+  const preview = buildPreview(config)
+  assert.equal(preview.text, buildSectionText(config))
+  assert.equal(preview.chars, preview.text.length)
+  assert.equal(preview.reminder, buildReminderText(config))
+  assert.equal(preview.reminderChars, preview.reminder.length)
+  assert.ok(preview.approxTokens > 0)
+  const compact = buildPreview(resolveConfig({ contract: 'compact' }))
+  assert.ok(compact.approxTokens < preview.approxTokens, 'compact should estimate fewer tokens')
 })
 
 test('language detection follows the user text', () => {
@@ -568,6 +600,16 @@ test('language: auto follows the session user messages', () => {
   assert.match(section.text({ agent: { session } }), /## Interim narration/)
   assert.match(reminder.text({ agent: { session } }), /## Narration reminder/)
 
+  // The language is latched for the rest of the turn: a second user message with
+  // another language must not rewrite the system prompt mid-turn (cache safety).
+  emit(session, {
+    type: 'user/message',
+    data: { message: { role: 'user', content: [{ type: 'text', text: '继续用中文说明' }] } },
+  })
+  assert.match(section.text({ agent: { session } }), /## Interim narration/)
+
+  // The next turn may re-latch to Chinese.
+  emit(session, { type: 'turn/start', data: { turn: 2 } })
   emit(session, {
     type: 'user/message',
     data: { message: { role: 'user', content: [{ type: 'text', text: '继续用中文说明' }] } },

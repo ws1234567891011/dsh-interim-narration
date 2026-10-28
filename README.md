@@ -5,7 +5,7 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
 [![npm](https://img.shields.io/npm/v/dsh-interim-narration.svg)](https://www.npmjs.com/package/dsh-interim-narration)
 
-> **English** — A tiny DeepSeek Harness plugin that makes the agent *think out loud*: every turn opens with how it understands the request and what it will do first, then short hand-off notes appear between batches of tool calls. The notes are ordinary assistant text, rendered in the live process timeline. Since 0.4.0 the plugin page also has a one-click *display* bridge (the process stays expanded instead of collapsing into a tool-call counter) and a mechanism-level safety net: if a tool step carried no narration, the end-of-prompt reminder gets sharper for the next step. Since 0.6.0 `language: auto` follows the language of your last message, `maxSentences: 0` follows the detail preset unless you override it, and the settings form is split into Basics / Opening and reminder / Advanced / Display. Zero runtime dependencies, no build step, and an optional in-app settings form edits the prompt knobs without touching YAML.
+> **English** — A tiny DeepSeek Harness plugin that makes the agent *think out loud*: every turn opens with how it understands the request and what it will do first, then short hand-off notes appear between batches of tool calls. The notes are ordinary assistant text, rendered in the live process timeline. Since 0.4.0 the plugin page also has a one-click *display* bridge (the process stays expanded instead of collapsing into a tool-call counter) and a mechanism-level safety net: if a tool step carried no narration, the end-of-prompt reminder gets sharper for the next step. Since 0.6.0 `language: auto` follows the language of your last message, `maxSentences: 0` follows the detail preset unless you override it, and the settings form is split into Basics / Opening and reminder / Advanced / Display. Since 0.8.0 a *compact* prompt contract saves roughly 59% of the static contract characters, the language choice is latched for the whole turn (cache-friendly), and the settings page previews the exact prompt text the host injects. Zero runtime dependencies, no build step, and an optional in-app settings form edits the prompt knobs without touching YAML.
 
 **简体中文** | [English](README.en.md)
 
@@ -49,6 +49,13 @@
 - **语言自适应**：`language: auto` 会跟着你最近一条消息的语言切换契约文案——中文消息用中文，英文消息用英文，不再固定中文；显式 `zh`/`en` 仍然优先。
 - **句数跟随档位**：`maxSentences: 0`（默认）表示跟随 `style` 预设（简洁 2 / 标准 3 / 详细 5 句），设置 1–10 才覆盖档位；配置页与 `/narration` 会显示当前档位对应的句数。
 - **配置页分区**：字段分成「基本」「开场与提醒」「进阶」「聊天里的显示」四块；会话跟踪状态按最近使用保留最多 200 个会话（超出淘汰最旧），长期运行不会无限增长。
+
+从 0.8.0 起：
+
+- **精简契约**：`contract: compact` 保留全部规则、去掉解释性句子，中文契约从 820 字符降到 334（约省 59% 字符、中文约 379→184 估算 token），适合长会话或省 token 优先的场景。
+- **语言按轮锁存**：`language: auto` 在每轮第一条可判定语言的消息上锁存，轮内不会因为混合语言再次翻转提示词（减少一次缓存失效）；下一轮可重新跟随。
+- **提示词预览**：配置页底部实时展示宿主实际注入的两段文本，以及字符数与估算 token；改任何字段都能先看再保存。
+- **不做末尾注入**：动态提醒留在系统提示尾部。宿主没有「只在本次请求末尾临时追加」的通道（`agent.inject` 会写成长久 user 消息、写进会话），所以不改会话是本插件坚持的边界。
 
 ## 安装
 
@@ -104,10 +111,10 @@ cp -r <本目录> node_modules/dsh-interim-narration
 2. 点该行的 **配置** 按钮，进入表单页；
 3. 改完点 **保存**。保存会写入当前 profile 的 `cordis.patch.yml`，并**立即生效**（下一轮对话的系统提示词就带新配置；无需重启、无需刷新）。
 
-表单里可以改：`enabled`、`style`、`maxSentences`、`minToolCalls`、`language`、`debug`、`reportBlockers`、`ackSteering`、`announcePlan`、`reminder`、`enforce`、`escalateAfter`（0.6.0 起表单分为「基本 / 开场与提醒 / 进阶 / 聊天里的显示」四块；`maxSentences` 填 0 表示跟随档位）。
+表单里可以改：`enabled`、`style`、`contract`、`maxSentences`、`minToolCalls`、`language`、`debug`、`reportBlockers`、`ackSteering`、`announcePlan`、`reminder`、`enforce`、`escalateAfter`（0.6.0 起表单分为「基本 / 开场与提醒 / 进阶 / 聊天里的显示」四块；`maxSentences` 填 0 表示跟随档位；`contract` 可选完整/精简契约）。
 其余字段（`order`、`text`、`extra`、`logFile`）属于安装期配置，仍需编辑 profile patch 或重新安装后生效。
-每个字段右侧的 ↺ 可单独「恢复默认」（取消该字段在 profile patch 里的覆盖），底部「全部恢复默认」一次清掉 12 个覆盖。
-页面底部的「聊天里的显示」区块可以顺手把「工作步骤展示 / 收起时机」调好（见下一节）。
+每个字段右侧的 ↺ 可单独「恢复默认」（取消该字段在 profile patch 里的覆盖），底部「全部恢复默认」一次清掉 13 个覆盖。
+页面底部的「聊天里的显示」区块可以顺手把「工作步骤展示 / 收起时机」调好（见下一节）；「提示词预览」区块显示当前设置下宿主实际注入的正文与字符/token 估算。
 
 > 说明：这个表单走的是 DSH 官方设置通道（`plugins.row.config` 插槽 + `configForms` 服务 + 宿主 `settings` 服务），
 > 保存语义与官方插件配置页一致（CAS 版本校验、只写 volatile 字段、写当前 profile patch）。
@@ -158,6 +165,7 @@ cp -r <本目录> node_modules/dsh-interim-narration
 | `order` | `8950` | 提示词段排序（越大越靠后）；工具文档在 1000–5000、交付物指引在 9000 |
 | `style` | `standard` | 详略档位：`concise`（只给结论）/ `standard`（结论+必要依据）/ `verbose`（补证据与风险） |
 | `maxSentences` | `0` | 每条叙述的句子数上限 0–10；`0` = 跟随 `style` 档位（concise 2 / standard 3 / verbose 5），1–10 覆盖档位 |
+| `contract` | `full` | 契约详略：`full` 含解释句（约 820 字符）/ `compact` 规则相同、少解释（约 334 字符，省 token） |
 | `minToolCalls` | `2` | 少于等于该次数工具调用的任务可直接给答案，不必叙述；设 `0` 表示任何任务都可叙述 |
 | `language` | `auto` | `auto` 跟随你最近一条消息的语言（中文/英文自动检测）；`zh`/`en` 强制指定 |
 | `reportBlockers` | `true` | 是否要求失败/受阻/计划变更时先说明再继续 |
@@ -171,7 +179,7 @@ cp -r <本目录> node_modules/dsh-interim-narration
 | `debug` | `false` | 写挂载日志，便于确认插件真的生效（超过 64 KiB 会自动清空重写） |
 | `logFile` | `$DSH_HOME/dsh-interim-narration.log` | debug 日志路径 |
 
-其中 `enabled`、`style`、`maxSentences`、`minToolCalls`、`language`、`debug`、`reportBlockers`、`ackSteering`、`announcePlan`、`reminder`、`enforce`、`escalateAfter`
+其中 `enabled`、`style`、`contract`、`maxSentences`、`minToolCalls`、`language`、`debug`、`reportBlockers`、`ackSteering`、`announcePlan`、`reminder`、`enforce`、`escalateAfter`
 是 **volatile** 字段，可在应用内表单修改并立即生效；`order`、`text`、`extra`、`logFile` 需要改 patch（重载后生效）。
 
 ### 三档预设
@@ -201,7 +209,8 @@ cp -r <本目录> node_modules/dsh-interim-narration
 - 插件不建立自己的缓存，也不读写宿主的缓存文件；它只改系统提示词里的两段文本。
 - 主契约段（约 950 字符）在配置不变时是静态的：同一段对话里首次请求计入缓存，之后命中，按缓存价计费。
 - 尾部提醒段是动态的：`enforce` 打开时，一旦出现「只调工具、不写正文」，提醒会追加一句；0.7.0 起这句在**整轮内粘住**——连续静默时提示词逐字节不变，只在「首次触发」和「下一轮已恢复叙述」两个点翻转，避免随静默步数反复变化而反复失效。
-- `language: auto` 随会话语言切换模板；切换发生时系统提示前缀变化，模型端的前缀缓存从系统提示处断开，当次请求的历史需要重新预填充。
+- `language: auto` 随会话语言切换模板；0.8.0 起每轮在第一条可判定语言的消息上锁存，轮内不再翻转；跨轮切换时系统提示前缀变化，模型端的前缀缓存从系统提示处断开，当次请求的历史需要重新预填充。
+- 想进一步降低静态成本：把 `contract` 设为 `compact`（中文字符数约 820→334），主契约段命中缓存时的占用也随之变小。
 - 在配置页保存任意字段，都会让下一轮请求使用新的系统提示前缀，同样是一次失效。
 - 想最大化缓存命中：把 `language` 固定为 `zh` 或 `en`；需要时关掉 `enforce` 或把 `escalateAfter` 调大；避免在会话中途频繁改配置。
 - 更底层的机制见 DSH 的 `llm-pi-ai` 文档「KV Cache 影响」：提供方按请求前缀复用，更早的内容一旦变化，从该处起的复用结束。
@@ -223,7 +232,7 @@ dsh-interim-narration/
 │   ├── index.js       # schemastery Config（volatile 可编辑字段）与公共导出
 │   └── client.js      # 手写 Web bundle（window.__ModuleLoader__.load）注册配置页
 ├── test/
-│   ├── smoke.mjs            # 宿主逻辑断言（38 个用例）
+│   ├── smoke.mjs            # 宿主逻辑断言（40 个用例）
 │   ├── client-smoke.mjs     # 客户端 bundle 注册/渲染、/narration、恢复默认断言
 │   ├── pack-smoke.mjs       # npm pack 文件清单与 manifest 校验
 │   ├── mock-llm.mjs         # 本地 OpenAI 兼容 mock，用于端到端验证
@@ -255,17 +264,19 @@ dsh-interim-narration/
 ## 开发
 
 ```bash
-npm test                 # 宿主 38 用例 + 客户端 bundle + npm pack 清单
+npm test                 # 宿主 40 用例 + 客户端 bundle + npm pack 清单
 node test/smoke.mjs      # 只跑宿主侧
 node test/client-smoke.mjs
 node test/pack-smoke.mjs
 ```
 
-33 个用例覆盖：插件形状、默认段 order/interpolate/文案、每轮开场要求（`announcePlan` 默认开启/关闭时只去掉开场行/简单任务仍保留开场）、`style` 预设与显式覆盖、`minToolCalls` 阈值、`reportBlockers`/`ackSteering` 开关、`enabled: false` 时文本为空、`language`/`order` 生效、`text`+`extra` 覆盖、空 `text` 回退内置文案、volatile 引用懒读取（保存后立即变化）、`plainValues` 解包、配置默认值与 20 余种非法值、正文非空且无模板泄漏、debug 日志写入与超限轮转、坏日志路径不影响挂载、volatile 更新日志行；提醒段的注册/顺序/开关/英文版与主契约的「禁止全程静默」硬性要求；以及 0.4.0 的静默步跟踪（`analyzeAssistantMessage` 区分正文与工具块、`turn/start` 重置、静默一步/多步的加压文案、开口后清零、`enforce` 关闭或未达阈值时保持静态、无会话信息时不升级）。
+40 个用例覆盖：插件形状、默认段 order/interpolate/文案、每轮开场要求（`announcePlan` 默认开启/关闭时只去掉开场行/简单任务仍保留开场）、`style` 预设与显式覆盖、`minToolCalls` 阈值、`reportBlockers`/`ackSteering` 开关、`enabled: false` 时文本为空、`language`/`order` 生效、`text`+`extra` 覆盖、空 `text` 回退内置文案、volatile 引用懒读取（保存后立即变化）、`plainValues` 解包、配置默认值与 20 余种非法值、正文非空且无模板泄漏、debug 日志写入与超限轮转、坏日志路径不影响挂载、volatile 更新日志行；提醒段的注册/顺序/开关/英文版与主契约的「禁止全程静默」硬性要求；以及 0.4.0 的静默步跟踪（`analyzeAssistantMessage` 区分正文与工具块、`turn/start` 重置、静默一步/多步的加压文案、开口后清零、`enforce` 关闭或未达阈值时保持静态、无会话信息时不升级）。
 
 代码分两层：`lib/core.js` 是纯逻辑 + 挂载（只 import Node 内置模块，可独立测试），`lib/index.js` 只声明 schemastery `Config` 并转出。`lib/client.js` 是手写的客户端 bundle（`window.__ModuleLoader__.load`），注册「插件 → 本插件 → 配置」表单。
 
 0.6.0 新增覆盖：`detectLanguage`/`analyzeUserMessage`/`resolveLanguage` 的语言判定、`language: auto` 跟随会话里最近一条用户消息（中英切换契约文案）、`maxSentences: 0` 跟随档位（2/3/5 句）与显式覆盖、会话跟踪状态的 LRU 上限（最多 200 个会话）。
+
+0.8.0 新增覆盖：`contract: compact` 仍包含硬性要求/开场/句数预算且中文字符数显著更短、`buildPreview` 两段文本与尺寸估算、开关（`enabled`/`reminder`）对预览的裁剪、`language: auto` 在同轮内锁存并在 `turn/start` 后重新判定；`test/client-smoke.mjs` 逐字节比对客户端预览与宿主构建器（9 组配置矩阵），并检查契约选择控件与预览区块渲染。
 
 端到端验证（不需要真实模型凭据）：`node test/mock-llm.mjs` 起一个本地 OpenAI 兼容 mock 服务器，在临时 profile 里把 `@deepseek-ai/dsh-llm-pi-ai` 指向它（示例见 `test/overlay-mock.example.yml`），用 `dsh --profile <test> --patch <overlay.yml> "..."` 跑一次，然后检查 mock 记录的请求体中系统提示词包含 `## 过程叙述`。
 

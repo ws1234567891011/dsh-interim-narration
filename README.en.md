@@ -37,6 +37,13 @@ Since 0.6.0:
 - **Sentence budget follows the preset** — `maxSentences: 0` (default) means "follow the detail preset" (concise 2 / standard 3 / verbose 5 sentences); set 1–10 to override. The settings page and `/narration` show the budget for the current preset.
 - **Grouped settings page** — fields are grouped into Basics / Opening and reminder / Advanced / Display in the chat; session tracking keeps at most 200 sessions (least-recently-used evicted) so long-running hosts stay bounded.
 
+Since 0.8.0:
+
+- **Compact contract** — `contract: compact` keeps every rule but drops the explanatory sentences: the Chinese contract shrinks from 820 to 334 characters (~59% shorter, ~379 → ~184 estimated tokens). Useful for long conversations or token-sensitive setups.
+- **Language latched per turn** — `language: auto` picks a language on the first decidable user message of a turn and keeps it for the rest of that turn, so mixed-language conversations cannot flip the prompt mid-turn (one less cache invalidation); the next turn re-evaluates.
+- **Prompt preview** — the settings page shows the exact text the host injects for the current settings, plus character and estimated-token counts, so you can inspect before saving.
+- **No end-of-request injection** — the dynamic reminder stays in the system prompt: the host has no "append only to this request" channel (`agent.inject` becomes a durable user message and writes the session), and not writing the session is a deliberate boundary of this plugin.
+
 ## Install
 
 ```bash
@@ -64,7 +71,7 @@ After installing or updating the package, **refresh the DSH page once** (Ctrl+R 
 2. Click **Configure**.
 3. Save. The values are written to the current profile's `cordis.patch.yml` and take effect on the next turn — no restart, no refresh.
 
-Editable fields: `enabled`, `style`, `maxSentences`, `minToolCalls`, `language`, `debug`, `reportBlockers`, `ackSteering`, `announcePlan`, `reminder`, `enforce`, `escalateAfter` (since 0.6.0 the form is grouped into Basics / Opening and reminder / Advanced / Display; `maxSentences: 0` follows the preset).
+Editable fields: `enabled`, `style`, `contract`, `maxSentences`, `minToolCalls`, `language`, `debug`, `reportBlockers`, `ackSteering`, `announcePlan`, `reminder`, `enforce`, `escalateAfter` (since 0.6.0 the form is grouped into Basics / Opening and reminder / Advanced / Display; `maxSentences: 0` follows the preset; `contract` switches between the full and compact contract). Since 0.8.0 the page also renders a live prompt preview with character and token estimates.
 Install-time fields (`order`, `text`, `extra`, `logFile`) still need a patch edit.
 
 The **Chat display** block at the bottom adjusts Chat's "Transcript view" and "Collapse timing" so the narration is actually visible.
@@ -97,6 +104,7 @@ Override in the profile's `cordis.patch.yml`:
 | `order` | `8950` | Section order (higher = later) |
 | `style` | `standard` | Verbosity: `concise` / `standard` / `verbose` |
 | `maxSentences` | `0` | Sentences per note, 0–10; `0` follows the `style` preset (concise 2 / standard 3 / verbose 5), 1–10 overrides |
+| `contract` | `full` | Contract verbosity: `full` keeps the explanatory sentences (~820 characters) / `compact` keeps the same rules with fewer words (~334 characters, saves prompt tokens) |
 | `minToolCalls` | `2` | Tasks with this many tool calls or fewer may skip narration; `0` = always narrate |
 | `language` | `auto` | `auto` follows your latest user message (Chinese/English detected); `zh`/`en` force a language |
 | `reportBlockers` | `true` | Ask the model to report blockers before continuing |
@@ -129,7 +137,8 @@ Narration is extra output tokens (usually tens to ~100 per tool batch); `enabled
 - The plugin keeps no cache of its own and never touches host cache files; it only changes two blocks of the system prompt.
 - The main contract block (~950 characters) is static while the config is stable: the first request in a conversation pays for it, later ones hit the cache and are billed at the cached rate.
 - The trailing reminder is dynamic: with `enforce` on, a silent tool step appends one line. Since 0.7.0 that line is **latched for the whole turn** — the prompt stays byte-identical while silence continues and only flips on the first trigger and on the next narrated turn, so it stops invalidating the prefix on every silent step.
-- `language: auto` switches the template with the conversation language; a switch rewrites the system-prompt prefix, so the provider's prefix cache breaks at the system prompt and that request's history is re-prefilled.
+- `language: auto` switches the template with the conversation language; since 0.8.0 it is latched on the first decidable message of each turn, so it cannot flip mid-turn; a cross-turn switch still rewrites the system-prompt prefix, so the provider's prefix cache breaks at the system prompt and that request's history is re-prefilled.
+- To reduce the static cost further, set `contract: compact` (Chinese contract 820 → 334 characters), which also shrinks the cached prefix.
 - Saving any settings field also rewrites the prefix for the next request — one invalidation per save.
 - To maximise cache hits: pin `language` to `zh` or `en`, disable `enforce` or raise `escalateAfter` when you do not need the safety net, and avoid editing settings mid-conversation.
 - For the underlying mechanics see DSH's `llm-pi-ai` docs, "KV Cache impact": providers reuse by request prefix, and any change to earlier content ends reuse at that point.
@@ -149,7 +158,7 @@ dsh-interim-narration/
 │   ├── index.js       # schemastery Config (volatile fields) + public exports
 │   └── client.js      # hand-written web bundle: in-app config page + /narration
 ├── test/
-│   ├── smoke.mjs            # host-side assertions (38 cases)
+│   ├── smoke.mjs            # host-side assertions (40 cases)
 │   ├── client-smoke.mjs     # client bundle registration/rendering assertions
 │   ├── pack-smoke.mjs       # npm pack manifest assertions
 │   ├── mock-llm.mjs         # local OpenAI-compatible mock for E2E checks
