@@ -47,11 +47,11 @@ Or install a local checkout (`link:` follows your source edits, `file:` copies i
 dsh plugin --profile desktop add link:C:/path/to/dsh-interim-narration
 ```
 
-Refresh the page afterwards (Ctrl+R). The plugin shows up in the sidebar's Plugins page with a Configure button; if it doesn't, restart DSH once.
+Refresh the page afterwards (Ctrl+R). There are two entries for the same page: **Settings → Narration** (recommended), or the Configure button on the plugin's row in the sidebar Plugins page; if it doesn't show up, restart DSH once.
 
 ## Tuning
 
-Open Plugins → `dsh-interim-narration` → Configure. Saving takes effect on the next turn, no restart needed.
+Open **Settings → Narration** (or Plugins → `dsh-interim-narration` → Configure — the same page). Saving takes effect on the next turn, no restart needed.
 
 The fields you'll actually touch:
 

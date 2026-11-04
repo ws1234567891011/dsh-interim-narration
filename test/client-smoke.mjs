@@ -1,6 +1,6 @@
 // Smoke test for the browser half: verify the bundle advertises the right
-// module id, survives factory evaluation, and registers exactly one row-config
-// page while the settings namespace is served.
+// module id, survives factory evaluation, and registers the row-config page
+// plus the top-level Settings section while the settings namespace is served.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { buildPreview as hostBuildPreview, resolveConfig as hostResolveConfig } from '../lib/core.js'
@@ -150,6 +150,17 @@ const page = registered['dsh-interim-narration#dsh-interim-narration']
 assert.ok(page, 'row config page must be registered')
 assert.equal(page.options.order, 40)
 assert.equal(page.options.locale, 'interimNarration')
+
+// v0.10.0: the same page is also a top-level Settings section.
+assert.ok(calls.some(([k, name]) => k === 'slots.inject' && name === 'settings.section'))
+const section = registered['settings.section']
+assert.ok(section, 'settings section must be registered')
+assert.equal(section.options.id, 'interim-narration', 'settings section id must be stable')
+assert.equal(section.options.order, 22, 'settings section must sit right after the built-in pages')
+assert.equal(section.options.locale, 'interimNarration')
+const sectionNode = section.Component({ view: 'page', t: (key) => key })
+assert.ok(sectionNode && typeof sectionNode.type === 'function', 'settings section must render the settings page')
+assert.equal(sectionNode.type(sectionNode.props).type, 'div', 'settings section must render a container')
 
 const summary = page.Component({ view: 'summary', t: (key) => key })
 assert.ok(summary, 'summary view must render something')

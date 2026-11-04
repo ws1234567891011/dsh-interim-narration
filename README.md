@@ -47,11 +47,11 @@ dsh plugin --profile desktop add dsh-interim-narration
 dsh plugin --profile desktop add link:C:/path/to/dsh-interim-narration
 ```
 
-装完刷新一下页面（Ctrl+R）。侧边栏「插件」里能看到这一行、点「配置」即可；如果没出现，重启一次 DSH。
+装完刷新一下页面（Ctrl+R）。配置入口有两个，都是同一个页面：**设置 → 过程叙述**（推荐），或侧边栏「插件」里这一行的「配置」；如果没出现，重启一次 DSH。
 
 ## 调整
 
-打开「插件」→ `dsh-interim-narration` →「配置」，保存后下一轮对话生效，不用重启。
+打开 **设置 → 过程叙述**（或「插件」→ `dsh-interim-narration` →「配置」），保存后下一轮对话生效，不用重启。
 
 常改的几项：
 
