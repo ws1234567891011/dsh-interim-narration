@@ -166,7 +166,7 @@ assert.ok(tree.includes('sectionPrompt'), 'page must group the opening and remin
 assert.ok(tree.includes('sectionAdvanced'), 'page must group the advanced fields')
 assert.ok(tree.includes('maxSentencesFollow'), 'a zero sentence budget must explain that the preset decides')
 assert.ok(tree.includes('visibilityNote'), 'display block must explain the settings equivalent')
-assert.ok(tree.includes('presetVisible'), 'display block must offer the recommended preset')
+assert.ok(tree.includes('presetCollapse') && tree.includes('presetExpand'), 'display block must offer both presets')
 assert.ok(tree.includes('enforce'), 'page must expose the enforcement toggle')
 
 // --- v0.8.0: contract preset and prompt preview -----------------------------
@@ -231,13 +231,31 @@ const maxSentencesInput = findNodes(
 )[0]
 assert.ok(maxSentencesInput, 'the sentence budget input must allow 0 (follow the preset)')
 
-// The preset button writes both display fields in one save.
-const presetButton = findNodes(
+// The presets write both display fields in one save: folded by default, and a
+// second button for the fully-expanded mode.
+const collapseButton = findNodes(
   container,
-  (node) => node.type === 'button' && String(node.children?.[0] ?? '').endsWith('presetVisible'),
+  (node) => node.type === 'button' && String(node.children?.[0] ?? '').endsWith('presetCollapse'),
 )[0]
-assert.ok(presetButton, 'preset button must exist')
-presetButton.props.onClick()
+assert.ok(collapseButton, 'collapse preset button must exist')
+collapseButton.props.onClick()
+assert.ok(
+  calls.some(([k, ops]) =>
+    k === 'chat-mutate' &&
+    JSON.stringify(ops) === JSON.stringify([
+      { op: 'set', path: ['transcriptView'], value: 'standard' },
+      { op: 'set', path: ['collapseTiming'], value: 'completion' },
+    ]),
+  ),
+  'collapse preset must set standard + completion',
+)
+
+const expandButton = findNodes(
+  container,
+  (node) => node.type === 'button' && String(node.children?.[0] ?? '').endsWith('presetExpand'),
+)[0]
+assert.ok(expandButton, 'expand preset button must exist')
+expandButton.props.onClick()
 assert.ok(
   calls.some(([k, ops]) =>
     k === 'chat-mutate' &&
@@ -246,7 +264,7 @@ assert.ok(
       { op: 'set', path: ['collapseTiming'], value: 'next-input' },
     ]),
   ),
-  'preset must write transcriptView + collapseTiming together',
+  'expand preset must set detailed + next-input',
 )
 
 // The plugin's own fields are still saved through its own namespace.

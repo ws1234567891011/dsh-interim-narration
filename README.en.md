@@ -68,7 +68,12 @@ The fields you'll actually touch:
 
 `order`, `text`, `extra` and `logFile` are install-time options — edit `cordis.patch.yml` in your profile for those.
 
-Just want to see it? The button at the bottom of the settings page ("recommended: keep the process visible") sets the chat to detailed + keep-open-until-next-message. It writes only when you click it, and never touches your settings on its own.
+Just want to see it? The settings page has two buttons at the bottom:
+
+- **Recommended: fold after the answer** sets standard + after-the-answer, so the process folds itself when the reply ends and only the final answer stays open;
+- **Keep the process visible** sets detailed + keep-open-until-next-message, for when you want to watch it work.
+
+Both write only when you click them, and never touch your settings on their own.
 
 ## Why can't I see it sometimes
 
