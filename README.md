@@ -22,6 +22,22 @@
 
 这些段落是**给你看的过程说明**，不是原始思维链（reasoning）；原始思考仍然是单独的「思考」块。
 
+## 界面预览
+
+插件配置页（由插件的真实表单组件渲染后截图）：
+
+![插件配置页](docs/images/settings-page.png)
+
+四块分别是「基本」「开场与提醒」「进阶」「聊天里的显示」；中间的「提示词预览」直接展示宿主这一刻会注入的契约文本、字符数与估算 token，改完字段先看再保存。
+
+过程叙述在聊天里的效果（示意，配色随主题变化）：
+
+![过程叙述示例](docs/images/narration-example.png)
+
+「插件」页里的行摘要：
+
+![插件行](docs/images/plugin-row.png)
+
 ## 它怎么工作
 
 这是一个很小的 host 侧 Cordis 插件，只做一件事：向系统提示词注册一个段落。
@@ -56,6 +72,11 @@
 - **语言按轮锁存**：`language: auto` 在每轮第一条可判定语言的消息上锁存，轮内不会因为混合语言再次翻转提示词（减少一次缓存失效）；下一轮可重新跟随。
 - **提示词预览**：配置页底部实时展示宿主实际注入的两段文本，以及字符数与估算 token；改任何字段都能先看再保存。
 - **不做末尾注入**：动态提醒留在系统提示尾部。宿主没有「只在本次请求末尾临时追加」的通道（`agent.inject` 会写成长久 user 消息、写进会话），所以不改会话是本插件坚持的边界。
+
+从 0.9.0 起：
+
+- **可跑的端到端测试**：`npm run test:e2e` 会在本机真的拉起一个临时 headless profile，用进程内 mock LLM 捕获实际请求，断言系统提示里确实有契约、提醒段与硬性要求，并检查挂载日志。没有 DSH 可执行文件时（例如 GitHub 托管 runner）打印 `SKIPPED` 并退出 0，所以 CI 可以无条件跑。
+- **界面预览进仓库**：`docs/images/` 与根目录 `screenshots.json` 提供配置页、聊天效果、插件行三张预览图，README 与应用市场都能直接读取。
 
 ## 安装
 
@@ -235,9 +256,15 @@ dsh-interim-narration/
 │   ├── smoke.mjs            # 宿主逻辑断言（40 个用例）
 │   ├── client-smoke.mjs     # 客户端 bundle 注册/渲染、/narration、恢复默认断言
 │   ├── pack-smoke.mjs       # npm pack 文件清单与 manifest 校验
-│   ├── mock-llm.mjs         # 本地 OpenAI 兼容 mock，用于端到端验证
+│   ├── e2e.mjs              # 真实 headless DSH + 进程内 mock LLM 端到端测试（无 DSH 时跳过）
+│   ├── mock-llm.mjs         # 本地 OpenAI 兼容 mock，用于手工端到端验证
 │   └── overlay-mock.example.yml
-├── docs/images/narration-flow.svg
+├── docs/images/
+│   ├── narration-flow.svg
+│   ├── settings-page.png    # 配置页（真实表单组件渲染）
+│   ├── narration-example.png
+│   └── plugin-row.png
+├── screenshots.json         # 应用市场读取的截图清单
 ├── cordis.patch.yml
 ├── package.json
 ├── README.en.md
@@ -249,7 +276,7 @@ dsh-interim-narration/
 
 ## 兼容性
 
-- 需要 DSH `0.2.x`（`0.2.1-rc.2` 上验证）；`package.json` 用机器可读声明写明了这一点：`dsh.engines.dsh: ">=0.2.1-rc.0 <0.3.0"`，插件管理器会在安装/启用前据此检查宿主版本（不满足时会提示授予 exemption）。
+- 需要 DSH `0.2.x`（在 `0.2.1-rc.2` 与 `0.2.1-rc.3` 上验证）；`package.json` 用机器可读声明写明了这一点：`dsh.engines.dsh: ">=0.2.1-rc.0 <0.3.0"`，插件管理器会在安装/启用前据此检查宿主版本（不满足时会提示授予 exemption）。
 - 插件只依赖宿主注入的 `systemPrompt` 服务，客户端半区依赖 `slots` / `locale` / `configForms` 三个内建服务。
 - `/narration` 命令额外依赖 `commandUi` 服务，缺失时命令自动跳过，其余功能不受影响。
 - `announcePlan` 等应用内配置页需要 DSH `0.2.x` 的设置服务（`plugins.row.config` + `configForms`）；更老的宿主上插件仍可工作，只是没有表单。
@@ -259,7 +286,7 @@ dsh-interim-narration/
 
 ## 贡献
 
-欢迎 issue / PR，详见 [CONTRIBUTING.md](CONTRIBUTING.md)。CI 会在 Node 20/22/24 上依次跑 `node test/smoke.mjs`、`node test/client-smoke.mjs` 与 `node test/pack-smoke.mjs`。
+欢迎 issue / PR，详见 [CONTRIBUTING.md](CONTRIBUTING.md)。CI 会在 Node 20/22/24 上依次跑 `node test/smoke.mjs`、`node test/client-smoke.mjs`、`node test/pack-smoke.mjs` 与 `node test/e2e.mjs`（托管 runner 上没有 DSH，e2e 会打印 `SKIPPED` 并正常退出）。
 
 ## 开发
 
@@ -268,6 +295,7 @@ npm test                 # 宿主 40 用例 + 客户端 bundle + npm pack 清单
 node test/smoke.mjs      # 只跑宿主侧
 node test/client-smoke.mjs
 node test/pack-smoke.mjs
+npm run test:e2e         # 真实 headless DSH + 进程内 mock LLM（约 6 秒；无 DSH 时跳过）
 ```
 
 40 个用例覆盖：插件形状、默认段 order/interpolate/文案、每轮开场要求（`announcePlan` 默认开启/关闭时只去掉开场行/简单任务仍保留开场）、`style` 预设与显式覆盖、`minToolCalls` 阈值、`reportBlockers`/`ackSteering` 开关、`enabled: false` 时文本为空、`language`/`order` 生效、`text`+`extra` 覆盖、空 `text` 回退内置文案、volatile 引用懒读取（保存后立即变化）、`plainValues` 解包、配置默认值与 20 余种非法值、正文非空且无模板泄漏、debug 日志写入与超限轮转、坏日志路径不影响挂载、volatile 更新日志行；提醒段的注册/顺序/开关/英文版与主契约的「禁止全程静默」硬性要求；以及 0.4.0 的静默步跟踪（`analyzeAssistantMessage` 区分正文与工具块、`turn/start` 重置、静默一步/多步的加压文案、开口后清零、`enforce` 关闭或未达阈值时保持静态、无会话信息时不升级）。
@@ -278,7 +306,9 @@ node test/pack-smoke.mjs
 
 0.8.0 新增覆盖：`contract: compact` 仍包含硬性要求/开场/句数预算且中文字符数显著更短、`buildPreview` 两段文本与尺寸估算、开关（`enabled`/`reminder`）对预览的裁剪、`language: auto` 在同轮内锁存并在 `turn/start` 后重新判定；`test/client-smoke.mjs` 逐字节比对客户端预览与宿主构建器（9 组配置矩阵），并检查契约选择控件与预览区块渲染。
 
-端到端验证（不需要真实模型凭据）：`node test/mock-llm.mjs` 起一个本地 OpenAI 兼容 mock 服务器，在临时 profile 里把 `@deepseek-ai/dsh-llm-pi-ai` 指向它（示例见 `test/overlay-mock.example.yml`），用 `dsh --profile <test> --patch <overlay.yml> "..."` 跑一次，然后检查 mock 记录的请求体中系统提示词包含 `## 过程叙述`。
+0.9.0 新增覆盖：`test/e2e.mjs` 会自己发现本机 DSH CLI（`DSH_CLI` 或默认安装路径），创建临时 headless profile、复制插件、写 overlay 把模型指向进程内 mock，跑一次真实任务后断言任务输出、系统提示含 `## 过程叙述`/`## 过程叙述提醒`/硬性要求、debug 日志含 `mounted ... sectionChars=`；结束后清理 profile 与临时目录（清理失败不影响测试结果）。没有 DSH 可执行文件时打印 `SKIPPED` 并以 0 退出，因此可以放进 CI。
+
+手工复现端到端（不需要真实模型凭据）：`node test/mock-llm.mjs` 起一个本地 OpenAI 兼容 mock 服务器，在临时 profile 里把 `@deepseek-ai/dsh-llm-pi-ai` 指向它（示例见 `test/overlay-mock.example.yml`），用 `dsh --profile <test> --patch <overlay.yml> "..."` 跑一次，然后检查 mock 记录的请求体中系统提示词包含 `## 过程叙述`。
 
 ## License
 

@@ -13,6 +13,22 @@ A tiny DeepSeek Harness plugin that makes the agent *think out loud*. Every turn
 
 The notes are process commentary for humans — **not** raw chain-of-thought. The model's private reasoning stays a separate "thinking" block.
 
+## Screenshots
+
+The settings page (rendered from the plugin's real form components):
+
+![Settings page](docs/images/settings-page.png)
+
+It has four blocks — Basics / Opening and reminder / Advanced / Display in the chat — plus a live prompt preview showing the exact text, character count and estimated tokens the host injects.
+
+Narration in the chat (illustrative, colours follow your theme):
+
+![Narration example](docs/images/narration-example.png)
+
+The plugin row:
+
+![Plugin row](docs/images/plugin-row.png)
+
 ## How it works
 
 This is a very small host-side [Cordis](https://github.com/cordiverse/cordis) plugin. It does exactly one thing: register prompt sections.
@@ -43,6 +59,11 @@ Since 0.8.0:
 - **Language latched per turn** — `language: auto` picks a language on the first decidable user message of a turn and keeps it for the rest of that turn, so mixed-language conversations cannot flip the prompt mid-turn (one less cache invalidation); the next turn re-evaluates.
 - **Prompt preview** — the settings page shows the exact text the host injects for the current settings, plus character and estimated-token counts, so you can inspect before saving.
 - **No end-of-request injection** — the dynamic reminder stays in the system prompt: the host has no "append only to this request" channel (`agent.inject` becomes a durable user message and writes the session), and not writing the session is a deliberate boundary of this plugin.
+
+Since 0.9.0:
+
+- **Runnable end-to-end test** — `npm run test:e2e` boots a real temporary headless profile against an in-process mock LLM, asserts the injected system prompt really contains the contract, reminder and hard requirement, and checks the mount log. When no DSH launcher is available (for example on GitHub-hosted runners) it prints `SKIPPED` and exits 0, so CI can run it unconditionally.
+- **Screenshots in the repository** — `docs/images/` and the root `screenshots.json` ship the three previews above; the README and the plugin marketplace can both read them.
 
 ## Install
 
@@ -161,9 +182,15 @@ dsh-interim-narration/
 │   ├── smoke.mjs            # host-side assertions (40 cases)
 │   ├── client-smoke.mjs     # client bundle registration/rendering assertions
 │   ├── pack-smoke.mjs       # npm pack manifest assertions
-│   ├── mock-llm.mjs         # local OpenAI-compatible mock for E2E checks
+│   ├── e2e.mjs              # real headless DSH + in-process mock LLM (skips without DSH)
+│   ├── mock-llm.mjs         # local OpenAI-compatible mock for manual E2E checks
 │   └── overlay-mock.example.yml
-├── docs/images/narration-flow.svg
+├── docs/images/
+│   ├── narration-flow.svg
+│   ├── settings-page.png
+│   ├── narration-example.png
+│   └── plugin-row.png
+├── screenshots.json         # screenshot list consumed by the plugin marketplace
 ├── cordis.patch.yml
 ├── package.json
 ├── CHANGELOG.md
@@ -174,14 +201,14 @@ dsh-interim-narration/
 
 ## Compatibility
 
-- DSH `0.2.x` (verified on `0.2.1-rc.2`). The manifest says so in machine-readable form: `dsh.engines.dsh: ">=0.2.1-rc.0 <0.3.0"`, so the plugin manager checks the host version before installing or enabling (an unsatisfied range surfaces an exemption prompt). The host half only needs the `systemPrompt` service; the client half uses `slots` / `locale` / `configForms` and optionally `commandUi`.
+- DSH `0.2.x` (verified on `0.2.1-rc.2` and `0.2.1-rc.3`). The manifest says so in machine-readable form: `dsh.engines.dsh: ">=0.2.1-rc.0 <0.3.0"`, so the plugin manager checks the host version before installing or enabling (an unsatisfied range surfaces an exemption prompt). The host half only needs the `systemPrompt` service; the client half uses `slots` / `locale` / `configForms` and optionally `commandUi`.
 - Without the settings services the plugin still works; you just lose the form.
 - Since 0.6.0 `language: auto` needs the user-message text from `session/event`; without that event it falls back to Chinese (the 0.5 behaviour), and explicit `zh`/`en` are unaffected.
 - No runtime dependencies. `@deepseek-ai/schemastery` is an optional host-provided peer used only to declare `Config`.
 
 ## Contributing
 
-Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). CI runs the three test scripts on Node 20/22/24.
+Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). CI runs the three test scripts plus `node test/e2e.mjs` on Node 20/22/24 (the E2E test prints `SKIPPED` on runners without a DSH install).
 
 ## License
 

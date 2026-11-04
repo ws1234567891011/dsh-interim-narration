@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.0
+
+- **可跑的端到端测试**：新增 `test/e2e.mjs`（`npm run test:e2e`）。它会自己发现本机 DSH CLI，
+  创建临时 headless profile、复制插件、把模型指向进程内 mock LLM，跑一次真实任务后断言：
+  任务输出、系统提示里确实有 `## 过程叙述` / `## 过程叙述提醒` / 硬性要求、debug 日志里有挂载行
+  （`sectionChars > 200`）。没有 DSH 可执行文件时（如 GitHub 托管 runner）打印 `SKIPPED` 并以 0 退出，
+  CI 可无条件执行；清理失败不会让测试失败。本机实测约 6 秒通过。
+- **界面预览进仓库**：新增 `docs/images/settings-page.png`（由插件真实表单组件渲染后截图）、
+  `docs/images/narration-example.png`、`docs/images/plugin-row.png` 与根目录 `screenshots.json`；
+  README 中英双版新增「界面预览 / Screenshots」章节，应用市场可直接读取截图清单。
+- **CI**：`.github/workflows/ci.yml` 增加 `node test/e2e.mjs` 步骤。
+- `package.json`：新增 `test:e2e` 脚本，`files` 打包 `screenshots.json`。
+- 版本 0.9.0。
+
 ## 0.8.0
 
 - **精简契约**：新增 `contract` 配置（`full` 默认 / `compact`）。`compact` 保留全部规则
