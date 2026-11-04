@@ -5,310 +5,114 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
 [![npm](https://img.shields.io/npm/v/dsh-interim-narration.svg)](https://www.npmjs.com/package/dsh-interim-narration)
 
-> **English** — A tiny DeepSeek Harness plugin that makes the agent *think out loud*: every turn opens with how it understands the request and what it will do first, then short hand-off notes appear between batches of tool calls. The notes are ordinary assistant text, rendered in the live process timeline. Since 0.4.0 the plugin page also has a one-click *display* bridge (the process stays expanded instead of collapsing into a tool-call counter) and a mechanism-level safety net: if a tool step carried no narration, the end-of-prompt reminder gets sharper for the next step. Since 0.6.0 `language: auto` follows the language of your last message, `maxSentences: 0` follows the detail preset unless you override it, and the settings form is split into Basics / Opening and reminder / Advanced / Display. Since 0.8.0 a *compact* prompt contract saves roughly 59% of the static contract characters, the language choice is latched for the whole turn (cache-friendly), and the settings page previews the exact prompt text the host injects. Zero runtime dependencies, no build step, and an optional in-app settings form edits the prompt knobs without touching YAML.
-
 **简体中文** | [English](README.en.md)
 
-让 DeepSeek Harness 的 agent **边做边说**：每轮先说明自己怎么理解、准备怎么做、第一步是什么，然后在每一批工具调用之间用普通回复正文写一段过程叙述，而不是等全部做完才给一个最终答案。
+装了这个插件，DeepSeek Harness 里的 agent 干活时会先说话：开头用一两句交代自己怎么理解你的消息、准备怎么做，之后每干完一批活再写一两句汇报，而不是闷头调工具、最后突然甩一个大答案。
 
-效果（配合聊天的「工作步骤展示」设置）是类似这样的过程时间线：
+效果大概是这样（配合聊天里的「工作步骤展示」设置）：
 
 ```
-我会逐项重写 91 项审计要点，明确公司"应做到什么"，再核对程序能否查证……
-  [编辑了文件] [运行了命令] [搜索了网页]
-治理、风险管理和信息安全部分已完成重写。接下来处理系统建设……
-  [编辑了文件] [运行了命令]
+我先把这批文件按类型分组：PDF 走转换，Word 直接转，图片最后处理。
+  [读取了 12 个文件] [运行了命令]
+有 3 个是扫描件，转出来需要人工核对，先放一边；剩下 9 个可以直接转。
+  [编辑了文件]
 ```
 
-这些段落是**给你看的过程说明**，不是原始思维链（reasoning）；原始思考仍然是单独的「思考」块。
+这些段落是给你看的工作说明，不是模型的原始思维链——原始思考仍然是单独的「思考」块。
 
 ## 界面预览
 
-插件配置页（由插件的真实表单组件渲染后截图）：
-
 ![插件配置页](docs/images/settings-page.png)
 
-四块分别是「基本」「开场与提醒」「进阶」「聊天里的显示」；中间的「提示词预览」直接展示宿主这一刻会注入的契约文本、字符数与估算 token，改完字段先看再保存。
+配置页分四块：基本、开场与提醒、进阶、聊天里的显示。中间的「提示词预览」会显示当前设置下实际注入给模型的文字、字符数和大概的 token 数，改完可以先看效果再保存。
 
-过程叙述在聊天里的效果（示意，配色随主题变化）：
+过程叙述在聊天里的样子（示意，配色跟随主题）：
 
 ![过程叙述示例](docs/images/narration-example.png)
 
-「插件」页里的行摘要：
+「插件」页里的那一行：
 
 ![插件行](docs/images/plugin-row.png)
 
-## 它怎么工作
-
-这是一个很小的 host 侧 Cordis 插件，只做一件事：向系统提示词注册一个段落。
-
-- 主段落 `narration:interim`，order `8950`（位于工具文档之后、交付物指引之前），`interpolate: false`；
-- 提醒段落 `narration:interim-reminder`，order `10150`（位于系统提示尾部、人格后缀之前，约 126 字符），`interpolate: false`；
-- 不注册工具、不注册 UI、不写运行时上下文；
-- 段落正文是一份结构化的写作契约，分四块：
-  - **什么时候说**：收到新消息、调用任何工具之前先开场（1–2 句：怎么理解、准备怎么做、第一步）；之后每批工具调用之后说；**硬性要求**：只要调用了工具就必须至少写一段正文，禁止全程静默；轻量调用可并入下一段；长命令/批量修改前先说一句；简单任务可省略中间叙述，但开场保留；
-  - **说什么**：开场给出判断和计划（做什么、为什么、先做哪一步，不要复述用户的话）；刚完成什么 + 关键结论（数字、文件名、判定）、下一步做什么和为什么；失败/受阻先说事实和影响；用户插话先回应一句；委派子代理要说明分工；
-  - **详略**：`style` 决定「只给结论 / 结论+必要依据 / 补充证据和风险」；
-  - **怎么写**：普通段落、不用标题/列表/加粗；用用户语言；写正文不写 thinking；过程叙述不等于最终答案。
-
-因为过程叙述是**正常 assistant 正文**，它可以出现在 DSH 的过程时间线里，但只有把「工作步骤展示」设置为保留/显示过程时你才看得到（见下）。
-
-从 0.3.0 起，插件还带一个**应用内配置页**：宿主半区导出 schemastery `Config`（可编辑字段声明为 `.volatile()`），客户端半区在「插件 → dsh-interim-narration → 配置」注册表单；保存后 loader 原地更新 volatile 引用，**下一轮提示词立即生效，无需重启**。尾部提醒段主要用于对抗长任务漂移：模型很容易在连续调工具时忘记叙述，所以把同一条要求在系统提示最后再放一遍。
-
-从 0.4.0 起有两处补强：
-
-- **显示桥接**：配置页底部多了「聊天里的显示」区块，直接绑定 Chat 自己的 `ui-chat` 设置（「工作步骤展示」与「收起时机」），另有一个「推荐：让过程全程可见」按钮一次设成「详细 + 下次有新消息时」。它只在用户点击时写入，不会自动改你的偏好；等价于「设置 → 通用 → 工作步骤展示」。
-- **机制级兜底**：宿主半区监听会话事件（`session/event`），跟踪每个会话「工具步骤是否带了正文」。如果某一步只调工具没说话，下一轮系统提示尾部的提醒会多出一句更明确的加压话术；连续静默两步则措辞更强硬。它只读事件、不写会话、不伪造消息，效果上限到提示词为止。
-
-从 0.6.0 起：
-
-- **语言自适应**：`language: auto` 会跟着你最近一条消息的语言切换契约文案——中文消息用中文，英文消息用英文，不再固定中文；显式 `zh`/`en` 仍然优先。
-- **句数跟随档位**：`maxSentences: 0`（默认）表示跟随 `style` 预设（简洁 2 / 标准 3 / 详细 5 句），设置 1–10 才覆盖档位；配置页与 `/narration` 会显示当前档位对应的句数。
-- **配置页分区**：字段分成「基本」「开场与提醒」「进阶」「聊天里的显示」四块；会话跟踪状态按最近使用保留最多 200 个会话（超出淘汰最旧），长期运行不会无限增长。
-
-从 0.8.0 起：
-
-- **精简契约**：`contract: compact` 保留全部规则、去掉解释性句子，中文契约从 820 字符降到 334（约省 59% 字符、中文约 379→184 估算 token），适合长会话或省 token 优先的场景。
-- **语言按轮锁存**：`language: auto` 在每轮第一条可判定语言的消息上锁存，轮内不会因为混合语言再次翻转提示词（减少一次缓存失效）；下一轮可重新跟随。
-- **提示词预览**：配置页底部实时展示宿主实际注入的两段文本，以及字符数与估算 token；改任何字段都能先看再保存。
-- **不做末尾注入**：动态提醒留在系统提示尾部。宿主没有「只在本次请求末尾临时追加」的通道（`agent.inject` 会写成长久 user 消息、写进会话），所以不改会话是本插件坚持的边界。
-
-从 0.9.0 起：
-
-- **可跑的端到端测试**：`npm run test:e2e` 会在本机真的拉起一个临时 headless profile，用进程内 mock LLM 捕获实际请求，断言系统提示里确实有契约、提醒段与硬性要求，并检查挂载日志。没有 DSH 可执行文件时（例如 GitHub 托管 runner）打印 `SKIPPED` 并退出 0，所以 CI 可以无条件跑。
-- **界面预览进仓库**：`docs/images/` 与根目录 `screenshots.json` 提供配置页、聊天效果、插件行三张预览图，README 与应用市场都能直接读取。
-
 ## 安装
 
-> 桌面端 profile 由 Electron 应用管理，CLI 不能直接启动 desktop profile，但 `dsh plugin` 子命令可以直接给 desktop profile 装包。
-
-方式一（npm，最省事，已发布到 npm registry）：
-
 ```bash
+# npm
 dsh plugin --profile desktop add dsh-interim-narration
 ```
 
-也可以直接 `npm install dsh-interim-narration`，然后把 `dsh-interim-narration` 加入 profile 的 `dsh.profile.bundles`。
-
-方式二（CLI，从本地目录安装，已在 desktop profile 实测）：
+也可以装本地目录（`link:` 跟随源码改动，`file:` 是复制一份）：
 
 ```bash
-# 链接安装：源码目录直接生效，改完 lib/ 重新启用即可（推荐开发时用）
-resources/runtime/cli/bin/dsh.cmd plugin --profile desktop add link:C:/path/to/dsh-interim-narration
-
-# 或者拷贝安装：装完就把代码复制进 profile，改源码需要重新装
-resources/runtime/cli/bin/dsh.cmd plugin --profile desktop add file:C:/path/to/dsh-interim-narration
+dsh plugin --profile desktop add link:C:/path/to/dsh-interim-narration
 ```
 
-该命令会 `pnpm add` 本地目录并把 `dsh-interim-narration` 加入 `dsh.profile.bundles`。PATH 里已有 `dsh` 时直接用 `dsh plugin ...`。
+装完刷新一下页面（Ctrl+R）。侧边栏「插件」里能看到这一行、点「配置」即可；如果没出现，重启一次 DSH。
 
-方式三（应用内）：侧边栏 **插件** 页 → 安装本地插件（指向本目录 / `link:` 路径）→ 把 `dsh-interim-narration` 选入组合包并启用。
+## 调整
 
-方式四（自建 profile，如 headless/tui）：
+打开「插件」→ `dsh-interim-narration` →「配置」，保存后下一轮对话生效，不用重启。
 
-```bash
-cd ~/.dsh/profiles/<name>
-pnpm add C:\path\to\dsh-interim-narration   # 或 link:C:\path\to\dsh-interim-narration
-# 然后把 dsh-interim-narration 加入该 profile 的 dsh.profile.bundles
-```
+常改的几项：
 
-方式五（手工最小安装，不经过包管理器，profile 目录下）：
-
-```bash
-mkdir -p node_modules
-cp -r <本目录> node_modules/dsh-interim-narration
-# package.json 的 dsh.profile.bundles 里追加 "dsh-interim-narration"
-```
-
-本包自带 `cordis.patch.yml`，按 `dsh.bundle.patch` 声明在安装后自动插入该行；`config` 可在 profile 的 `cordis.patch.yml` 里按 `id: dsh-interim-narration` 覆盖。
-
-安装完（或更新本包后）**刷新一次 DSH 页面**（Ctrl+R / F5）；若「配置」入口没出现，重启一次 DSH 应用。客户端半区是普通 Web bundle，由宿主扫描 Loader 条目后按需加载，无需单独构建。
-
-## 在 DSH 里直接改配置（0.3.0+）
-
-不用改代码、也不用碰 YAML：
-
-1. 打开侧边栏 **插件** 页，找到 **dsh-interim-narration** 这一行；
-2. 点该行的 **配置** 按钮，进入表单页；
-3. 改完点 **保存**。保存会写入当前 profile 的 `cordis.patch.yml`，并**立即生效**（下一轮对话的系统提示词就带新配置；无需重启、无需刷新）。
-
-表单里可以改：`enabled`、`style`、`contract`、`maxSentences`、`minToolCalls`、`language`、`debug`、`reportBlockers`、`ackSteering`、`announcePlan`、`reminder`、`enforce`、`escalateAfter`（0.6.0 起表单分为「基本 / 开场与提醒 / 进阶 / 聊天里的显示」四块；`maxSentences` 填 0 表示跟随档位；`contract` 可选完整/精简契约）。
-其余字段（`order`、`text`、`extra`、`logFile`）属于安装期配置，仍需编辑 profile patch 或重新安装后生效。
-每个字段右侧的 ↺ 可单独「恢复默认」（取消该字段在 profile patch 里的覆盖），底部「全部恢复默认」一次清掉 13 个覆盖。
-页面底部的「聊天里的显示」区块可以顺手把「工作步骤展示 / 收起时机」调好（见下一节）；「提示词预览」区块显示当前设置下宿主实际注入的正文与字符/token 估算。
-
-> 说明：这个表单走的是 DSH 官方设置通道（`plugins.row.config` 插槽 + `configForms` 服务 + 宿主 `settings` 服务），
-> 保存语义与官方插件配置页一致（CAS 版本校验、只写 volatile 字段、写当前 profile patch）。
-
-## 快捷命令 `/narration`（0.5.0+）
-
-在聊天输入框里输入 `/narration` 回车，会弹出一个选择面板：
-
-- 快捷切换详略：简洁 / 标准 / 详细（当前档位带 ✓）；
-- 一键开关 `enabled`；
-- 「让过程全程可见」「恢复默认显示」两行直接调整 Chat 的工作步骤展示与收起时机。
-
-选中即写入并立即生效。命令通过 `ctx.inject(['commandUi'])` 可选注册：宿主没有命令服务时自动跳过，不影响其他功能。
-
-## 让过程叙述真的可见
-
-插件只负责"让模型愿意说"，能否看到还取决于聊天设置。0.4.0 起最省事的办法：
-
-1. 侧边栏 **插件** → **dsh-interim-narration** → **配置**；
-2. 底部「聊天里的显示」点 **推荐：让过程全程可见**（=「详细」+「下次有新消息时」）。
-
-等价的手动设置：
-
-1. 设置 → 通用 → **工作步骤展示**：选 **详细** 或 **完全展开**；
-2. 同页 **工作步骤收起时机**：选 **下次有新消息时**（否则每次回答结束过程组会立即收起，你只会看到「已完成，用时 …」这一行）；
-3. 已折叠的旧轮次：点开「已完成，用时 … ⌄」即可看到其中的正文段落和工具行。
-
-「简洁」「标准」模式会收起已完成轮次的过程组（最终答案不受影响），所以看起来就只剩工具调用计数。
-
-## 配置
-
-可编辑字段也能在应用内「插件 → dsh-interim-narration → 配置」改（见上）。
-
-也可以在 profile 的 `cordis.patch.yml` 中按 id 覆盖，例如：
-
-```yaml
-- id: dsh-interim-narration
-  config:
-    enabled: true
-    style: standard
-    minToolCalls: 2
-    language: zh
-```
-
-| 字段 | 默认值 | 说明 |
+| 字段 | 默认 | 作用 |
 | --- | --- | --- |
-| `enabled` | `true` | `false` 时不注册任何提示词段（插件仍挂载，便于随时开关） |
-| `order` | `8950` | 提示词段排序（越大越靠后）；工具文档在 1000–5000、交付物指引在 9000 |
-| `style` | `standard` | 详略档位：`concise`（只给结论）/ `standard`（结论+必要依据）/ `verbose`（补证据与风险） |
-| `maxSentences` | `0` | 每条叙述的句子数上限 0–10；`0` = 跟随 `style` 档位（concise 2 / standard 3 / verbose 5），1–10 覆盖档位 |
-| `contract` | `full` | 契约详略：`full` 含解释句（约 820 字符）/ `compact` 规则相同、少解释（约 334 字符，省 token） |
-| `minToolCalls` | `2` | 少于等于该次数工具调用的任务可直接给答案，不必叙述；设 `0` 表示任何任务都可叙述 |
-| `language` | `auto` | `auto` 跟随你最近一条消息的语言（中文/英文自动检测）；`zh`/`en` 强制指定 |
-| `reportBlockers` | `true` | 是否要求失败/受阻/计划变更时先说明再继续 |
-| `ackSteering` | `true` | 是否要求用户中途插话时先回应一句再继续 |
-| `announcePlan` | `true` | 是否要求每轮开场（首次工具调用前）先说理解、计划与第一步；关掉只去掉开场要求 |
-| `reminder` | `true` | 是否在系统提示尾部再放一条短提醒（约 126 字符），防止长任务里只顾调工具、不说话 |
-| `enforce` | `true` | 机制级兜底：监听会话事件，某一步只调工具没写正文时，让下一步的尾部提醒加压；关掉则提醒保持静态 |
-| `escalateAfter` | `1` | 连续静默几步后开始加压（1–5）；`1` 最积极，调大可容忍更长的静默段 |
-| `text` | 无 | 完全替换内置文案 |
-| `extra` | 无 | 追加到内置文案（或 `text`）之后的自定义要求 |
-| `debug` | `false` | 写挂载日志，便于确认插件真的生效（超过 64 KiB 会自动清空重写） |
-| `logFile` | `$DSH_HOME/dsh-interim-narration.log` | debug 日志路径 |
+| `enabled` | 开 | 关掉后提示词段落变空，插件本身还挂着 |
+| `style` | 标准 | 说话多少：简洁 2 句 / 标准 3 句 / 详细 5 句 |
+| `contract` | 完整 | 改「精简」能省约 59% 的契约字符，规则不变、解释变少 |
+| `maxSentences` | 0 | 0 表示跟着 `style` 的句数走，填 1–10 则固定 |
+| `language` | 自动 | 自动跟随你最近一条消息的语言，也可以固定中/英 |
+| `announcePlan` | 开 | 每轮开头先说理解和计划 |
+| `enforce` | 开 | 某一步只调工具没说话，下一条提示会加压 |
+| `escalateAfter` | 1 | 连续静默几步开始加压，1 最积极 |
 
-其中 `enabled`、`style`、`contract`、`maxSentences`、`minToolCalls`、`language`、`debug`、`reportBlockers`、`ackSteering`、`announcePlan`、`reminder`、`enforce`、`escalateAfter`
-是 **volatile** 字段，可在应用内表单修改并立即生效；`order`、`text`、`extra`、`logFile` 需要改 patch（重载后生效）。
+`order`、`text`、`extra`、`logFile` 属于安装期参数，改它们要编辑 profile 里的 `cordis.patch.yml`。
 
-### 三档预设
+只想看效果的话，配置页底部有一个「推荐：让过程全程可见」按钮，会把聊天设成「详细 + 下次有新消息时」。它只在你点击时写入，不会偷偷改你的设置。
 
-| 想要的效果 | 配置 |
-| --- | --- |
-| 安静：只在关键转折处说话 | `style: concise`、`minToolCalls: 3` |
-| 标准（默认） | 不配置 |
-| 详细：像直播一样跟进度 | `style: verbose`、`minToolCalls: 1`、`reportBlockers: true` |
+## 为什么有时候看不到它说话
 
-## 验证是否生效
+1. **聊天折叠了**：默认的「简洁/标准」会把已完成的轮次收成「已完成，用时…… · N 次工具调用」。点开那一行，或直接用上面的一键按钮。
+2. **它真的没说**：模型忙起来容易忘。插件会在系统提示末尾放一条短提醒，连续静默时提醒会变硬（`enforce`、`escalateAfter`）。
+3. **省 token**：把 `contract` 改精简，或把 `style` 调低。
 
-- 把 `config.debug` 设为 `true`（应用内配置页也能开），查看 `~/.dsh/dsh-interim-narration.log`，应出现
-  `mounted order=8950 style=standard maxSentences=3 minToolCalls=2 enabled=true reminder=true enforce=true escalateAfter=1 sectionChars=<n> reminderChars=<n>`，
-  以及 `--- section text ---` 与 `--- reminder text ---` 两段正文；
-  在配置页保存后，同一文件会出现 `volatile-update paths=… enabled=true style=… language=… sectionChars=…`（说明引用被原地更新）；
-  开启 `enforce` 且某一步只调工具没写正文时，还会出现 `reminder-escalated silentSteps=… escalateAfter=… session=… lang=… sessionLang=…`，表示下一步的尾部提醒已加压；若这一轮用英文消息，`sessionLang=en` 且段正文会切换成英文契约；
-- 或让 agent 回答："原样输出系统提示里以『## 过程叙述』开头的那一段"。
+## 它到底改了什么
 
-## 代价
+只做一件事：往系统提示里注册两段文字——一段是完整的工作说明（什么时候说、说什么、怎么说），一段是结尾的短提醒。
 
-- 过程叙述是额外的输出 token（通常每批工具调用多几十到一百多 token），会稍微增加耗时与费用；
-- 叙述质量取决于模型；`style: concise`、`minToolCalls` 调大、或 `enabled: false` 随时可关。
+不调工具、不写会话、不伪造消息、不联网、没有运行时依赖。所有效果都来自提示词，所以上限就是「让模型更愿意说」，做不到强制。
 
-## 缓存影响（prompt cache）
+## 缓存影响
 
-- 插件不建立自己的缓存，也不读写宿主的缓存文件；它只改系统提示词里的两段文本。
-- 主契约段（约 950 字符）在配置不变时是静态的：同一段对话里首次请求计入缓存，之后命中，按缓存价计费。
-- 尾部提醒段是动态的：`enforce` 打开时，一旦出现「只调工具、不写正文」，提醒会追加一句；0.7.0 起这句在**整轮内粘住**——连续静默时提示词逐字节不变，只在「首次触发」和「下一轮已恢复叙述」两个点翻转，避免随静默步数反复变化而反复失效。
-- `language: auto` 随会话语言切换模板；0.8.0 起每轮在第一条可判定语言的消息上锁存，轮内不再翻转；跨轮切换时系统提示前缀变化，模型端的前缀缓存从系统提示处断开，当次请求的历史需要重新预填充。
-- 想进一步降低静态成本：把 `contract` 设为 `compact`（中文字符数约 820→334），主契约段命中缓存时的占用也随之变小。
-- 在配置页保存任意字段，都会让下一轮请求使用新的系统提示前缀，同样是一次失效。
-- 想最大化缓存命中：把 `language` 固定为 `zh` 或 `en`；需要时关掉 `enforce` 或把 `escalateAfter` 调大；避免在会话中途频繁改配置。
-- 更底层的机制见 DSH 的 `llm-pi-ai` 文档「KV Cache 影响」：提供方按请求前缀复用，更早的内容一旦变化，从该处起的复用结束。
+插件自己不缓存任何东西，也不碰宿主缓存；它改的是系统提示，因此会影响服务端的 prompt 前缀缓存：
+
+- 主契约在设置不变时是静态的，第一次付费、之后命中缓存。
+- 结尾提醒是动态的：某一步静默后会多出一句。0.7.0 起这句在整轮内保持不变，只在触发和恢复时各变一次，不会每步都让缓存失效。
+- `language: auto` 只在每轮的第一条消息上判断一次，轮内不会来回翻。
+- 改设置会让下一轮的前缀失效一次，这很正常。
+
+想尽量多命中缓存：把语言固定成中文或英文，不需要兜底时关掉 `enforce`，尽量别在对话中途改配置。
+
+## 兼容性
+
+- DSH `0.2.x`（在 0.2.1-rc.2、0.2.1-rc.3 上验证过）；`package.json` 里有机器可读的 `dsh.engines.dsh`，插件管理器安装前会检查。
+- 需要宿主的 `systemPrompt` 服务；配置页需要设置服务（`configForms` + `plugins.row.config`）；`/narration` 快捷命令需要 `commandUi`，没有就自动跳过。
+- 没有 `session/event` 事件时，静默加压和语言自动跟随会退化成静态行为，其余功能不受影响。
+
+## 开发
+
+```bash
+npm test            # 宿主逻辑 + 客户端 bundle + 打包清单
+npm run test:e2e    # 真跑一次 headless DSH + 本地 mock 模型，约 6 秒
+```
+
+`test/e2e.mjs` 会自己找本机的 DSH；找不到就打印 `SKIPPED` 退出（CI 和没装 DSH 的机器都能跑）。更多说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 卸载
 
 ```bash
 dsh plugin --profile desktop remove dsh-interim-narration
 ```
-
-或直接把 `enabled` 设为 `false` 保留插件但不生效。
-
-## 项目结构
-
-```
-dsh-interim-narration/
-├── lib/
-│   ├── core.js        # 纯逻辑 + 挂载（只 import Node 内置模块，可独立测试）
-│   ├── index.js       # schemastery Config（volatile 可编辑字段）与公共导出
-│   └── client.js      # 手写 Web bundle（window.__ModuleLoader__.load）注册配置页
-├── test/
-│   ├── smoke.mjs            # 宿主逻辑断言（40 个用例）
-│   ├── client-smoke.mjs     # 客户端 bundle 注册/渲染、/narration、恢复默认断言
-│   ├── pack-smoke.mjs       # npm pack 文件清单与 manifest 校验
-│   ├── e2e.mjs              # 真实 headless DSH + 进程内 mock LLM 端到端测试（无 DSH 时跳过）
-│   ├── mock-llm.mjs         # 本地 OpenAI 兼容 mock，用于手工端到端验证
-│   └── overlay-mock.example.yml
-├── docs/images/
-│   ├── narration-flow.svg
-│   ├── settings-page.png    # 配置页（真实表单组件渲染）
-│   ├── narration-example.png
-│   └── plugin-row.png
-├── screenshots.json         # 应用市场读取的截图清单
-├── cordis.patch.yml
-├── package.json
-├── README.en.md
-├── CHANGELOG.md
-├── CONTRIBUTING.md
-├── SECURITY.md
-└── LICENSE
-```
-
-## 兼容性
-
-- 需要 DSH `0.2.x`（在 `0.2.1-rc.2` 与 `0.2.1-rc.3` 上验证）；`package.json` 用机器可读声明写明了这一点：`dsh.engines.dsh: ">=0.2.1-rc.0 <0.3.0"`，插件管理器会在安装/启用前据此检查宿主版本（不满足时会提示授予 exemption）。
-- 插件只依赖宿主注入的 `systemPrompt` 服务，客户端半区依赖 `slots` / `locale` / `configForms` 三个内建服务。
-- `/narration` 命令额外依赖 `commandUi` 服务，缺失时命令自动跳过，其余功能不受影响。
-- `announcePlan` 等应用内配置页需要 DSH `0.2.x` 的设置服务（`plugins.row.config` + `configForms`）；更老的宿主上插件仍可工作，只是没有表单。
-- 0.4.0 的机制级兜底会监听根上下文的 `session/event`（`turn/start`、`assistant/message`）来数「静默步数」；宿主不提供该事件时状态机保持 0，插件退化为纯提示词模式，其余功能不受影响。
-- 0.6.0 的 `language: auto` 依赖 `session/event` 里的用户消息文本来判断语言；宿主不提供用户消息事件时回落到中文（与 0.5 行为一致），显式 `zh`/`en` 不受影响。
-- 运行时不需要任何 npm 依赖；`@deepseek-ai/schemastery` 是宿主提供的 optional peer，只用于声明 `Config`。
-
-## 贡献
-
-欢迎 issue / PR，详见 [CONTRIBUTING.md](CONTRIBUTING.md)。CI 会在 Node 20/22/24 上依次跑 `node test/smoke.mjs`、`node test/client-smoke.mjs`、`node test/pack-smoke.mjs` 与 `node test/e2e.mjs`（托管 runner 上没有 DSH，e2e 会打印 `SKIPPED` 并正常退出）。
-
-## 开发
-
-```bash
-npm test                 # 宿主 40 用例 + 客户端 bundle + npm pack 清单
-node test/smoke.mjs      # 只跑宿主侧
-node test/client-smoke.mjs
-node test/pack-smoke.mjs
-npm run test:e2e         # 真实 headless DSH + 进程内 mock LLM（约 6 秒；无 DSH 时跳过）
-```
-
-40 个用例覆盖：插件形状、默认段 order/interpolate/文案、每轮开场要求（`announcePlan` 默认开启/关闭时只去掉开场行/简单任务仍保留开场）、`style` 预设与显式覆盖、`minToolCalls` 阈值、`reportBlockers`/`ackSteering` 开关、`enabled: false` 时文本为空、`language`/`order` 生效、`text`+`extra` 覆盖、空 `text` 回退内置文案、volatile 引用懒读取（保存后立即变化）、`plainValues` 解包、配置默认值与 20 余种非法值、正文非空且无模板泄漏、debug 日志写入与超限轮转、坏日志路径不影响挂载、volatile 更新日志行；提醒段的注册/顺序/开关/英文版与主契约的「禁止全程静默」硬性要求；以及 0.4.0 的静默步跟踪（`analyzeAssistantMessage` 区分正文与工具块、`turn/start` 重置、静默一步/多步的加压文案、开口后清零、`enforce` 关闭或未达阈值时保持静态、无会话信息时不升级）。
-
-代码分两层：`lib/core.js` 是纯逻辑 + 挂载（只 import Node 内置模块，可独立测试），`lib/index.js` 只声明 schemastery `Config` 并转出。`lib/client.js` 是手写的客户端 bundle（`window.__ModuleLoader__.load`），注册「插件 → 本插件 → 配置」表单。
-
-0.6.0 新增覆盖：`detectLanguage`/`analyzeUserMessage`/`resolveLanguage` 的语言判定、`language: auto` 跟随会话里最近一条用户消息（中英切换契约文案）、`maxSentences: 0` 跟随档位（2/3/5 句）与显式覆盖、会话跟踪状态的 LRU 上限（最多 200 个会话）。
-
-0.8.0 新增覆盖：`contract: compact` 仍包含硬性要求/开场/句数预算且中文字符数显著更短、`buildPreview` 两段文本与尺寸估算、开关（`enabled`/`reminder`）对预览的裁剪、`language: auto` 在同轮内锁存并在 `turn/start` 后重新判定；`test/client-smoke.mjs` 逐字节比对客户端预览与宿主构建器（9 组配置矩阵），并检查契约选择控件与预览区块渲染。
-
-0.9.0 新增覆盖：`test/e2e.mjs` 会自己发现本机 DSH CLI（`DSH_CLI` 或默认安装路径），创建临时 headless profile、复制插件、写 overlay 把模型指向进程内 mock，跑一次真实任务后断言任务输出、系统提示含 `## 过程叙述`/`## 过程叙述提醒`/硬性要求、debug 日志含 `mounted ... sectionChars=`；结束后清理 profile 与临时目录（清理失败不影响测试结果）。没有 DSH 可执行文件时打印 `SKIPPED` 并以 0 退出，因此可以放进 CI。
-
-手工复现端到端（不需要真实模型凭据）：`node test/mock-llm.mjs` 起一个本地 OpenAI 兼容 mock 服务器，在临时 profile 里把 `@deepseek-ai/dsh-llm-pi-ai` 指向它（示例见 `test/overlay-mock.example.yml`），用 `dsh --profile <test> --patch <overlay.yml> "..."` 跑一次，然后检查 mock 记录的请求体中系统提示词包含 `## 过程叙述`。
 
 ## License
 

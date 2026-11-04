@@ -7,208 +7,112 @@
 
 **English** | [简体中文](README.md)
 
-A tiny DeepSeek Harness plugin that makes the agent *think out loud*. Every turn opens with how it understands the request and what it will do first; between batches of tool calls it writes short hand-off notes as ordinary assistant text. Those notes show up in the live process timeline instead of being hidden until the final answer.
+This plugin makes the agent in DeepSeek Harness talk while it works. Every turn it opens with a sentence or two about how it reads your message and what it is about to do, then drops a short note after each batch of tool calls, instead of quietly chaining tools and dumping one big answer at the end.
 
-![Narration flow](docs/images/narration-flow.svg)
+It looks roughly like this (together with the chat's "work steps" setting):
 
-The notes are process commentary for humans — **not** raw chain-of-thought. The model's private reasoning stays a separate "thinking" block.
+```
+I'll split these files by type first: PDFs get converted, Word files convert directly, images last.
+  [read 12 files] [ran a command]
+Three of them are scans — the text will need manual checking, so I'm setting those aside. The other nine convert cleanly.
+  [edited a file]
+```
+
+Those paragraphs are process commentary for you, not the model's raw chain-of-thought; the private reasoning stays in its own "thinking" block.
 
 ## Screenshots
 
-The settings page (rendered from the plugin's real form components):
+![Plugin settings page](docs/images/settings-page.png)
 
-![Settings page](docs/images/settings-page.png)
+The page has four blocks — Basics, Opening and reminder, Advanced, Display in the chat — plus a live prompt preview showing the exact text the host injects, its character count and an estimated token count.
 
-It has four blocks — Basics / Opening and reminder / Advanced / Display in the chat — plus a live prompt preview showing the exact text, character count and estimated tokens the host injects.
-
-Narration in the chat (illustrative, colours follow your theme):
+What the narration looks like in the chat (illustrative, colours follow your theme):
 
 ![Narration example](docs/images/narration-example.png)
 
-The plugin row:
+The row in the plugin list:
 
 ![Plugin row](docs/images/plugin-row.png)
-
-## How it works
-
-This is a very small host-side [Cordis](https://github.com/cordiverse/cordis) plugin. It does exactly one thing: register prompt sections.
-
-- Main section `narration:interim`, order `8950` (after the tool docs, before the deliverable guidance), `interpolate: false`.
-- Reminder section `narration:interim-reminder`, order `10150` (near the end of the system prompt, before the persona suffix, ~126 chars), `interpolate: false`.
-- No tools, no runtime context, no session writes.
-- The section body is a structured writing contract with four blocks:
-  - **When to speak** — open before the first tool call (1–2 sentences: how the request is understood, the plan, the first step); write between tool batches; **hard rule**: if a tool was called, at least one narration paragraph must exist in that turn; light calls may be folded into the next note; long commands and bulk edits deserve a heads-up; simple tasks may skip the middle notes but keep the opening.
-  - **What to say** — the opening gives judgement and plan (what, why, which step first); then what was just finished, key findings (numbers, file names, verdicts), what is next and why; failures first state the fact and impact; when the user interjects, answer it in one sentence first.
-  - **How much** — `style` selects terse / standard / verbose.
-  - **How to write it** — plain paragraphs, no headings/lists/bold, in the user's language, as normal text (not `thinking`), and the narration is not the final answer.
-
-Because the notes are regular assistant text, the chat UI decides whether they are visible. Since 0.3.0 the plugin also ships an **in-app settings page**, and since 0.4.0 it adds two safety nets:
-
-- **Display bridge** — the settings page has a "Chat display" block bound to Chat's own `ui-chat` settings ("Transcript view" and "Collapse timing"), plus a one-click **Make the process fully visible** button (`detailed` + `next-input`). It writes only when you click it.
-- **Mechanism-level enforcement** — the host half listens to `session/event` and tracks whether a tool step carried narration. When a step stayed silent, the end-of-prompt reminder gets sharper for the next step (`enforce`, `escalateAfter`). It only reads events; it never writes the session or fabricates messages.
-
-Since 0.6.0:
-
-- **Language follows the conversation** — `language: auto` now picks the contract language from your most recent user message (Chinese message → Chinese contract, English message → English contract); explicit `zh`/`en` still win.
-- **Sentence budget follows the preset** — `maxSentences: 0` (default) means "follow the detail preset" (concise 2 / standard 3 / verbose 5 sentences); set 1–10 to override. The settings page and `/narration` show the budget for the current preset.
-- **Grouped settings page** — fields are grouped into Basics / Opening and reminder / Advanced / Display in the chat; session tracking keeps at most 200 sessions (least-recently-used evicted) so long-running hosts stay bounded.
-
-Since 0.8.0:
-
-- **Compact contract** — `contract: compact` keeps every rule but drops the explanatory sentences: the Chinese contract shrinks from 820 to 334 characters (~59% shorter, ~379 → ~184 estimated tokens). Useful for long conversations or token-sensitive setups.
-- **Language latched per turn** — `language: auto` picks a language on the first decidable user message of a turn and keeps it for the rest of that turn, so mixed-language conversations cannot flip the prompt mid-turn (one less cache invalidation); the next turn re-evaluates.
-- **Prompt preview** — the settings page shows the exact text the host injects for the current settings, plus character and estimated-token counts, so you can inspect before saving.
-- **No end-of-request injection** — the dynamic reminder stays in the system prompt: the host has no "append only to this request" channel (`agent.inject` becomes a durable user message and writes the session), and not writing the session is a deliberate boundary of this plugin.
-
-Since 0.9.0:
-
-- **Runnable end-to-end test** — `npm run test:e2e` boots a real temporary headless profile against an in-process mock LLM, asserts the injected system prompt really contains the contract, reminder and hard requirement, and checks the mount log. When no DSH launcher is available (for example on GitHub-hosted runners) it prints `SKIPPED` and exits 0, so CI can run it unconditionally.
-- **Screenshots in the repository** — `docs/images/` and the root `screenshots.json` ship the three previews above; the README and the plugin marketplace can both read them.
 
 ## Install
 
 ```bash
-# npm, easiest
+# npm
 dsh plugin --profile desktop add dsh-interim-narration
 ```
 
-Other options:
+Or install a local checkout (`link:` follows your source edits, `file:` copies it):
 
 ```bash
-# local directory, linked (edits to lib/ are picked up on re-enable)
 dsh plugin --profile desktop add link:C:/path/to/dsh-interim-narration
-
-# local directory, copied into the profile
-dsh plugin --profile desktop add file:C:/path/to/dsh-interim-narration
 ```
 
-The command runs `pnpm add` inside the profile and appends `dsh-interim-narration` to `dsh.profile.bundles`. The package declares its own `cordis.patch.yml` via `dsh.bundle.patch`; override its `config` by targeting `id: dsh-interim-narration` in the profile patch.
+Refresh the page afterwards (Ctrl+R). The plugin shows up in the sidebar's Plugins page with a Configure button; if it doesn't, restart DSH once.
 
-After installing or updating the package, **refresh the DSH page once** (Ctrl+R / F5). If the "Configure" entry does not appear, restart the DSH app once. The client half is a plain prebuilt web bundle; no build step is required.
+## Tuning
 
-## Configure in-app (0.3.0+)
+Open Plugins → `dsh-interim-narration` → Configure. Saving takes effect on the next turn, no restart needed.
 
-1. Open **Plugins** in the sidebar and find the **dsh-interim-narration** row.
-2. Click **Configure**.
-3. Save. The values are written to the current profile's `cordis.patch.yml` and take effect on the next turn — no restart, no refresh.
+The fields you'll actually touch:
 
-Editable fields: `enabled`, `style`, `contract`, `maxSentences`, `minToolCalls`, `language`, `debug`, `reportBlockers`, `ackSteering`, `announcePlan`, `reminder`, `enforce`, `escalateAfter` (since 0.6.0 the form is grouped into Basics / Opening and reminder / Advanced / Display; `maxSentences: 0` follows the preset; `contract` switches between the full and compact contract). Since 0.8.0 the page also renders a live prompt preview with character and token estimates.
-Install-time fields (`order`, `text`, `extra`, `logFile`) still need a patch edit.
-
-The **Chat display** block at the bottom adjusts Chat's "Transcript view" and "Collapse timing" so the narration is actually visible.
-
-> The form uses the official DSH settings pipeline (`plugins.row.config` slot + `configForms` service + host `settings` service): CAS revision checks, volatile fields only, persisted into the current profile patch.
-
-## Making it visible
-
-1. **Plugins** → **dsh-interim-narration** → **Configure**.
-2. Under "Chat display", click **Make the process fully visible** (= `detailed` + `next-input`).
-
-Manual equivalent: Settings → General → **Transcript view** = "Detailed" or "Expanded"; **Collapse timing** = "Next input". In "Compact"/"Standard" modes completed turns fold into a "worked for … · N tool calls" line, which is why all you see is a counter.
-
-## Configuration
-
-Override in the profile's `cordis.patch.yml`:
-
-```yaml
-- id: dsh-interim-narration
-  config:
-    enabled: true
-    style: standard
-    minToolCalls: 2
-    language: en
-```
-
-| Field | Default | Meaning |
+| Field | Default | What it does |
 | --- | --- | --- |
-| `enabled` | `true` | `false` keeps the plugin mounted but registers empty sections |
-| `order` | `8950` | Section order (higher = later) |
-| `style` | `standard` | Verbosity: `concise` / `standard` / `verbose` |
-| `maxSentences` | `0` | Sentences per note, 0–10; `0` follows the `style` preset (concise 2 / standard 3 / verbose 5), 1–10 overrides |
-| `contract` | `full` | Contract verbosity: `full` keeps the explanatory sentences (~820 characters) / `compact` keeps the same rules with fewer words (~334 characters, saves prompt tokens) |
-| `minToolCalls` | `2` | Tasks with this many tool calls or fewer may skip narration; `0` = always narrate |
-| `language` | `auto` | `auto` follows your latest user message (Chinese/English detected); `zh`/`en` force a language |
-| `reportBlockers` | `true` | Ask the model to report blockers before continuing |
-| `ackSteering` | `true` | Ask the model to acknowledge user interjections first |
-| `announcePlan` | `true` | Open each turn with understanding + plan + first step |
-| `reminder` | `true` | Append the short end-of-prompt reminder |
-| `enforce` | `true` | Mechanism-level escalation when a step stayed silent |
-| `escalateAfter` | `1` | Silent steps before escalation (1–5) |
-| `text` | — | Replace the built-in section text |
-| `extra` | — | Append extra rules after the built-in text |
-| `debug` | `false` | Write mount logs (rotated at 64 KiB) |
-| `logFile` | `$DSH_HOME/dsh-interim-narration.log` | Debug log path |
+| `enabled` | on | Turning it off empties the prompt section; the plugin stays mounted |
+| `style` | standard | How much it talks: concise 2 / standard 3 / verbose 5 sentences |
+| `contract` | full | Switch to compact to save about 59% of the contract characters; same rules, fewer explanations |
+| `maxSentences` | 0 | 0 follows the `style` budget; 1–10 pins it |
+| `language` | auto | Follows the language of your last message; can be pinned to Chinese or English |
+| `announcePlan` | on | Opens each turn with understanding and plan |
+| `enforce` | on | If a tool step had no narration, the next reminder gets sharper |
+| `escalateAfter` | 1 | How many silent steps before it gets sharper; 1 is the most eager |
 
-The first twelve are volatile and editable in-app; `order`/`text`/`extra`/`logFile` need a patch edit.
+`order`, `text`, `extra` and `logFile` are install-time options — edit `cordis.patch.yml` in your profile for those.
 
-## Verify
+Just want to see it? The button at the bottom of the settings page ("recommended: keep the process visible") sets the chat to detailed + keep-open-until-next-message. It writes only when you click it, and never touches your settings on its own.
 
-Set `debug: true` and check `~/.dsh/dsh-interim-narration.log` for a line such as
-`mounted order=8950 style=standard ... enforce=true escalateAfter=1 sectionChars=<n> reminderChars=<n>`,
-plus `volatile-update paths=… language=…` after an in-app save and `reminder-escalated silentSteps=… lang=… sessionLang=…` when the safety net kicks in (an English turn flips the contract to English and reports `sessionLang=en`).
+## Why can't I see it sometimes
 
-Or simply ask the agent: "repeat verbatim the system-prompt section that starts with `## 过程叙述`".
+1. **The chat folded it.** The default compact/standard modes collapse finished turns into "done, took 3m · 9 tool calls". Click that row, or use the button above.
+2. **It actually didn't narrate.** Models forget when they get busy. The plugin puts a short reminder at the end of the system prompt, and sharpens it after silent steps (`enforce`, `escalateAfter`).
+3. **You want to spend fewer tokens.** Switch `contract` to compact or lower `style`.
 
-## Cost
+## What it actually changes
 
-Narration is extra output tokens (usually tens to ~100 per tool batch); `enabled: false` turns it off instantly.
+One thing: it registers two pieces of text in the system prompt — a full description of the working convention (when to speak, what to say, how) and a short reminder at the end.
 
-## Cache impact (prompt cache)
+No tools, no session writes, no faked messages, no network calls, no runtime dependencies. Everything comes from the prompt, so the ceiling is "the model is more willing to narrate" — it can't force it.
 
-- The plugin keeps no cache of its own and never touches host cache files; it only changes two blocks of the system prompt.
-- The main contract block (~950 characters) is static while the config is stable: the first request in a conversation pays for it, later ones hit the cache and are billed at the cached rate.
-- The trailing reminder is dynamic: with `enforce` on, a silent tool step appends one line. Since 0.7.0 that line is **latched for the whole turn** — the prompt stays byte-identical while silence continues and only flips on the first trigger and on the next narrated turn, so it stops invalidating the prefix on every silent step.
-- `language: auto` switches the template with the conversation language; since 0.8.0 it is latched on the first decidable message of each turn, so it cannot flip mid-turn; a cross-turn switch still rewrites the system-prompt prefix, so the provider's prefix cache breaks at the system prompt and that request's history is re-prefilled.
-- To reduce the static cost further, set `contract: compact` (Chinese contract 820 → 334 characters), which also shrinks the cached prefix.
-- Saving any settings field also rewrites the prefix for the next request — one invalidation per save.
-- To maximise cache hits: pin `language` to `zh` or `en`, disable `enforce` or raise `escalateAfter` when you do not need the safety net, and avoid editing settings mid-conversation.
-- For the underlying mechanics see DSH's `llm-pi-ai` docs, "KV Cache impact": providers reuse by request prefix, and any change to earlier content ends reuse at that point.
+## Cache impact
+
+The plugin doesn't cache anything and doesn't touch host caches; it edits the system prompt, which does affect server-side prefix caching:
+
+- The main contract is static while your settings don't change: paid once, then cached.
+- The end-of-prompt reminder is dynamic: a silent step adds a line. Since 0.7.0 that line stays identical for the rest of the turn, so the prefix changes once when it appears and once when it clears, not on every step.
+- `language: auto` is decided once per turn from the first user message, so it doesn't flip back and forth.
+- Changing settings invalidates the next turn's prefix once, which is expected.
+
+To maximise cache hits: pin the language, turn `enforce` off when you don't need the safety net, and avoid editing settings in the middle of a conversation.
+
+## Compatibility
+
+- DSH `0.2.x` (verified on 0.2.1-rc.2 and 0.2.1-rc.3). `package.json` declares a machine-readable `dsh.engines.dsh`, which the plugin manager checks before install.
+- Needs the host `systemPrompt` service. The settings page needs the settings services (`configForms` + `plugins.row.config`). The `/narration` command needs `commandUi` and is skipped when absent.
+- Without the `session/event` stream, silent-step escalation and automatic language follow degrade to static behaviour; everything else still works.
+
+## Development
+
+```bash
+npm test            # host logic + client bundle + package manifest
+npm run test:e2e    # one real headless DSH run against a local mock model (~6s)
+```
+
+`test/e2e.mjs` finds a local DSH install on its own and prints `SKIPPED` when there isn't one, so CI and machines without DSH can still run it. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## Uninstall
 
 ```bash
 dsh plugin --profile desktop remove dsh-interim-narration
 ```
-
-## Project layout
-
-```
-dsh-interim-narration/
-├── lib/
-│   ├── core.js        # pure logic + host mounting (Node built-ins only)
-│   ├── index.js       # schemastery Config (volatile fields) + public exports
-│   └── client.js      # hand-written web bundle: in-app config page + /narration
-├── test/
-│   ├── smoke.mjs            # host-side assertions (40 cases)
-│   ├── client-smoke.mjs     # client bundle registration/rendering assertions
-│   ├── pack-smoke.mjs       # npm pack manifest assertions
-│   ├── e2e.mjs              # real headless DSH + in-process mock LLM (skips without DSH)
-│   ├── mock-llm.mjs         # local OpenAI-compatible mock for manual E2E checks
-│   └── overlay-mock.example.yml
-├── docs/images/
-│   ├── narration-flow.svg
-│   ├── settings-page.png
-│   ├── narration-example.png
-│   └── plugin-row.png
-├── screenshots.json         # screenshot list consumed by the plugin marketplace
-├── cordis.patch.yml
-├── package.json
-├── CHANGELOG.md
-├── CONTRIBUTING.md
-├── SECURITY.md
-└── LICENSE
-```
-
-## Compatibility
-
-- DSH `0.2.x` (verified on `0.2.1-rc.2` and `0.2.1-rc.3`). The manifest says so in machine-readable form: `dsh.engines.dsh: ">=0.2.1-rc.0 <0.3.0"`, so the plugin manager checks the host version before installing or enabling (an unsatisfied range surfaces an exemption prompt). The host half only needs the `systemPrompt` service; the client half uses `slots` / `locale` / `configForms` and optionally `commandUi`.
-- Without the settings services the plugin still works; you just lose the form.
-- Since 0.6.0 `language: auto` needs the user-message text from `session/event`; without that event it falls back to Chinese (the 0.5 behaviour), and explicit `zh`/`en` are unaffected.
-- No runtime dependencies. `@deepseek-ai/schemastery` is an optional host-provided peer used only to declare `Config`.
-
-## Contributing
-
-Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). CI runs the three test scripts plus `node test/e2e.mjs` on Node 20/22/24 (the E2E test prints `SKIPPED` on runners without a DSH install).
 
 ## License
 
