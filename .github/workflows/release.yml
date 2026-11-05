@@ -42,6 +42,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          # Writes the .npmrc that makes NODE_AUTH_TOKEN usable. When switching
+          # to Trusted Publishing this line must go away again.
+          registry-url: https://registry.npmjs.org
 
       # Trusted Publishing needs a recent npm (OIDC token exchange).
       - name: Upgrade npm
