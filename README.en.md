@@ -98,6 +98,8 @@ The plugin doesn't cache anything and doesn't touch host caches; it edits the sy
 
 To maximise cache hits: pin the language, turn `enforce` off when you don't need the safety net, and avoid editing settings in the middle of a conversation.
 
+We also measured the alternative of moving the dynamic reminder to the end of the request (the host's runtime context). It does keep the system prompt byte-identical, but every silent step adds a persisted ~230-token context message that keeps being billed on later requests; with a 50k-token history and cache hits at roughly a tenth of the price, it takes about two thousand more requests to break even. So we kept the current design.
+
 ## Compatibility
 
 - DSH `0.2.x` (verified on 0.2.1-rc.2 and 0.2.1-rc.3). `package.json` declares a machine-readable `dsh.engines.dsh`, which the plugin manager checks before install.
@@ -112,6 +114,8 @@ npm run test:e2e    # one real headless DSH run against a local mock model (~6s)
 ```
 
 `test/e2e.mjs` finds a local DSH install on its own and prints `SKIPPED` when there isn't one, so CI and machines without DSH can still run it. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+Releases are cut by `.github/workflows/release.yml`: pushing a tag publishes to npm and creates the GitHub Release. It still uses the `NPM_TOKEN` repository secret; moving to npm Trusted Publishing requires 2FA to be enabled on the account first, and the workflow carries a TODO for that switch.
 
 ## Uninstall
 

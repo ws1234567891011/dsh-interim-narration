@@ -98,6 +98,8 @@ dsh plugin --profile desktop add link:C:/path/to/dsh-interim-narration
 
 想尽量多命中缓存：把语言固定成中文或英文，不需要兜底时关掉 `enforce`，尽量别在对话中途改配置。
 
+顺便说一句实测结论：也试过把动态提醒挪到请求末尾（宿主运行时上下文），它确实能让系统提示完全不变，但每次静默都会多一条约 230 tokens 的上下文消息，之后每个请求都要为此付费；按「历史 5 万 token、命中价约一成」估算，要同一会话再跑两千多次才回本，所以没有采用，保持现在这套做法。
+
 ## 兼容性
 
 - DSH `0.2.x`（在 0.2.1-rc.2、0.2.1-rc.3 上验证过）；`package.json` 里有机器可读的 `dsh.engines.dsh`，插件管理器安装前会检查。
@@ -112,6 +114,8 @@ npm run test:e2e    # 真跑一次 headless DSH + 本地 mock 模型，约 6 秒
 ```
 
 `test/e2e.mjs` 会自己找本机的 DSH；找不到就打印 `SKIPPED` 退出（CI 和没装 DSH 的机器都能跑）。更多说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+发布由 `.github/workflows/release.yml` 完成（打 tag 即发布 npm + GitHub Release）。目前仍用仓库 secret `NPM_TOKEN`；迁移到 npm Trusted Publishing 需要账号先开启 2FA，workflow 里留了 TODO。
 
 ## 卸载
 

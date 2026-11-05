@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.1
+
+- 精简 `package.json` 的 `description`：从一整段版本史压成一句话，版本演进继续放在 README / CHANGELOG。
+- README 中英双版「缓存影响」补充 runtime-context 实验结论：为什么没有把动态提醒挪到请求末尾。
+- 发布链路为迁移 npm Trusted Publishing（OIDC）做了准备（workflow 里升级 npm、清理 token 用法），
+  但 npm 要求账号先开启 2FA 才能创建 trusted publisher 连接，所以这一版仍用仓库 secret `NPM_TOKEN`
+  发布；开启 2FA 后按 workflow 里的 TODO 切换即可。
+- 版本 0.10.1。
+
 ## 0.10.0
 
 - **配置页进「设置」**：整页配置现在同时注册为 DSH 的顶层设置分区（设置 → 过程叙述，`settings.section`，

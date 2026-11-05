@@ -42,7 +42,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
+
+      # Trusted Publishing needs a recent npm (OIDC token exchange).
+      - name: Upgrade npm
+        run: npm install -g npm@latest
 
       - name: Version guard
         run: |
@@ -66,6 +69,9 @@ jobs:
           npm pack --silent
           mv dsh-interim-narration-*.tgz dsh-interim-narration.tgz
 
+      # TODO: migrate to npm Trusted Publishing (OIDC). npm only lets you create
+      # the trusted-publisher connection after the account has 2FA configured,
+      # so this keeps using a bypass-2FA token until that happens.
       - name: Publish to npm
         run: npm publish --provenance --access public
         env:
