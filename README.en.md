@@ -70,10 +70,10 @@ The fields you'll actually touch:
 
 Just want to see it? The settings page has two buttons at the bottom:
 
-- **Recommended: fold after the answer** sets standard + after-the-answer, so the process folds itself when the reply ends and only the final answer stays open;
-- **Keep the process visible** sets detailed + keep-open-until-next-message, for when you want to watch it work.
+- **Recommended: fold after the answer** sets standard + after-the-answer + final-answer-only, so the process folds itself when the reply ends and only the final answer stays in the transcript;
+- **Keep the process visible** sets detailed + keep-open-until-next-message + all replies, for when you want to watch it work.
 
-Both write only when you click them, and never touch your settings on their own.
+The "Replies kept after collapse" setting is what DSH 0.2.2 added: *All replies* keeps the narration paragraphs between tool calls in the transcript, while *Final answer only* leaves just the answer once a turn folds. Both buttons write only when you click them, and never touch your settings on their own.
 
 ## Why can't I see it sometimes
 

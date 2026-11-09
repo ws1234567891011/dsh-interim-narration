@@ -74,7 +74,7 @@ const chatSnapshot = {
   status: 'ready',
   writable: true,
   revision: 7,
-  value: { transcriptView: 'standard', collapseTiming: 'next-input', performanceUsage: 'detailed' },
+  value: { transcriptView: 'standard', collapseTiming: 'next-input', foldedReplies: 'all', performanceUsage: 'detailed' },
 }
 const chatScope = {
   getSnapshot: () => chatSnapshot,
@@ -236,6 +236,15 @@ assert.ok(
   'display control must mutate ui-chat with the live revision',
 )
 
+// ui-chat 0.2.2 added foldedReplies; the page must expose it so a folded turn
+// can keep only the final answer and drop the interim narration paragraphs.
+const replySelects = findNodes(
+  container,
+  (node) => node.type === 'select' && (node.children ?? []).some((child) => child?.props?.value === 'final'),
+)
+assert.equal(replySelects.length, 1, 'expected the foldedReplies select to render')
+assert.equal(replySelects[0].props.value, 'all', 'foldedReplies select must show the current value')
+
 const maxSentencesInput = findNodes(
   container,
   (node) => node.type === 'input' && node.props?.type === 'number' && node.props?.min === 0,
@@ -256,9 +265,10 @@ assert.ok(
     JSON.stringify(ops) === JSON.stringify([
       { op: 'set', path: ['transcriptView'], value: 'standard' },
       { op: 'set', path: ['collapseTiming'], value: 'completion' },
+      { op: 'set', path: ['foldedReplies'], value: 'final' },
     ]),
   ),
-  'collapse preset must set standard + completion',
+  'collapse preset must set standard + completion + final-only replies',
 )
 
 const expandButton = findNodes(
@@ -273,9 +283,10 @@ assert.ok(
     JSON.stringify(ops) === JSON.stringify([
       { op: 'set', path: ['transcriptView'], value: 'detailed' },
       { op: 'set', path: ['collapseTiming'], value: 'next-input' },
+      { op: 'set', path: ['foldedReplies'], value: 'all' },
     ]),
   ),
-  'expand preset must set detailed + next-input',
+  'expand preset must set detailed + next-input + all replies',
 )
 
 // The plugin's own fields are still saved through its own namespace.
@@ -321,6 +332,7 @@ assert.ok(
   calls.some(([k, ops]) => k === 'chat-mutate' && JSON.stringify(ops) === JSON.stringify([
     { op: 'set', path: ['transcriptView'], value: 'detailed' },
     { op: 'set', path: ['collapseTiming'], value: 'next-input' },
+    { op: 'set', path: ['foldedReplies'], value: 'all' },
   ])),
   '/narration display preset must write ui-chat',
 )
