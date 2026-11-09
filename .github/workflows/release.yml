@@ -64,6 +64,9 @@ jobs:
       - name: Release declaration check
         run: node test/release-check.mjs "${{ steps.tag.outputs.tag }}"
 
+      - name: Extract release notes
+        run: node test/release-notes.mjs "${{ steps.tag.outputs.tag }}"
+
       - name: Host plugin tests
         run: node test/smoke.mjs
 
@@ -92,5 +95,7 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: ${{ steps.tag.outputs.tag }}
           files: dsh-interim-narration.tgz
-          generate_release_notes: true
+          # The declaration comes from the CHANGELOG section, not GitHub's
+          # auto-generated PR list (this project has no PRs to summarise).
+          body_path: release-notes.md
           fail_on_unmatched_files: true
