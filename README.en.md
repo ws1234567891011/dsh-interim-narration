@@ -100,6 +100,10 @@ To maximise cache hits: pin the language, turn `enforce` off when you don't need
 
 We also measured the alternative of moving the dynamic reminder to the end of the request (the host's runtime context). It does keep the system prompt byte-identical, but every silent step adds a persisted ~230-token context message that keeps being billed on later requests; with a 50k-token history and cache hits at roughly a tenth of the price, it takes about two thousand more requests to break even. So we kept the current design.
 
+## Versioning and releases
+
+Since 1.0.0 this project follows semantic versioning: within 1.x no existing option is removed and the settings page and `/narration` command keep working, while new capabilities arrive with defaults. Every release declares what changed and whether upgrading needs an action, in [CHANGELOG.md](CHANGELOG.md) and the GitHub Release; the release workflow runs `node test/release-check.mjs` before publishing and fails if that declaration is missing. The full policy is in [VERSIONING.md](VERSIONING.md).
+
 ## Compatibility
 
 - DSH `0.2.x` (verified on 0.2.1-rc.2 and 0.2.1-rc.3). `package.json` declares a machine-readable `dsh.engines.dsh`, which the plugin manager checks before install.

@@ -1,6 +1,6 @@
 {
   "name": "dsh-interim-narration",
-  "version": "0.10.3",
+  "version": "1.0.0",
   "description": "让 DeepSeek Harness 的 agent 每轮先讲理解与计划，并在工具调用之间用正文写过程叙述（边做边说）；在「设置 → 过程叙述」里可调档位、语言与开关，静默步骤会自动加压。",
   "type": "module",
   "main": "lib/index.js",
@@ -17,6 +17,7 @@
     "README.md",
     "README.en.md",
     "CHANGELOG.md",
+    "VERSIONING.md",
     "SECURITY.md",
     "screenshots.json",
     "LICENSE"
@@ -26,6 +27,7 @@
     "test:host": "node test/smoke.mjs",
     "test:client": "node test/client-smoke.mjs",
     "test:pack": "node test/pack-smoke.mjs",
+    "release:check": "node test/release-check.mjs",
     "test:e2e": "node test/e2e.mjs",
     "mock": "node test/mock-llm.mjs"
   },

@@ -58,6 +58,12 @@ jobs:
           echo "tag=$TAG package=$PKG"
           test "$VERSION" = "$PKG"
 
+      # Every release must be declared: CHANGELOG section for this exact
+      # version, host range in package.json, and tag == version. See
+      # VERSIONING.md; this step is what makes the rule binding.
+      - name: Release declaration check
+        run: node test/release-check.mjs "${{ steps.tag.outputs.tag }}"
+
       - name: Host plugin tests
         run: node test/smoke.mjs
 

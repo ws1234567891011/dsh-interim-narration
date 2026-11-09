@@ -100,6 +100,10 @@ dsh plugin --profile desktop add link:C:/path/to/dsh-interim-narration
 
 顺便说一句实测结论：也试过把动态提醒挪到请求末尾（宿主运行时上下文），它确实能让系统提示完全不变，但每次静默都会多一条约 230 tokens 的上下文消息，之后每个请求都要为此付费；按「历史 5 万 token、命中价约一成」估算，要同一会话再跑两千多次才回本，所以没有采用，保持现在这套做法。
 
+## 版本与发布
+
+从 1.0.0 起按语义化版本（SemVer）发布：1.x 内不删除已有配置项、不改变设置页与 `/narration` 命令的用法，新增能力只加默认值。每个版本都会在 [CHANGELOG.md](CHANGELOG.md) 和 GitHub Release 里写明改了什么、升级要不要动作；发布工作流会在发 npm 之前跑 `node test/release-check.mjs`，版本声明缺失就直接失败。完整规则见 [VERSIONING.md](VERSIONING.md)。
+
 ## 兼容性
 
 - DSH `0.2.x`（在 0.2.1-rc.2、0.2.1-rc.3 上验证过）；`package.json` 里有机器可读的 `dsh.engines.dsh`，插件管理器安装前会检查。
