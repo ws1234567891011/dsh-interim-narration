@@ -47,7 +47,7 @@ Or install a local checkout (`link:` follows your source edits, `file:` copies i
 dsh plugin --profile desktop add link:C:/path/to/dsh-interim-narration
 ```
 
-Refresh the page afterwards (Ctrl+R). There are two entries for the same page: **Settings → Narration** (recommended), or the Configure button on the plugin's row in the sidebar Plugins page; if it doesn't show up, restart DSH once.
+Refresh the page afterwards (Ctrl+R). There are three entries for the same page: **Settings → Narration** (recommended), the “Interim narration” row in the sidebar, or the Configure button on the plugin's row in the sidebar Plugins page; if it doesn't show up, restart DSH once.
 
 ## Tuning
 
@@ -110,13 +110,13 @@ DSH has a built-in behaviour: if you send a message while a turn is still runnin
 
 Restart DSH fully after changing it. A DSH update overwrites `app.asar`, the status returns to "original", and one more click re-applies it. This switch touches local files only; it writes no profile config and is not part of the npm release.
 
-## Settings page: sidebar entry and horizontal tabs (local)
+## Settings page: sidebar entry and horizontal tabs (1.0.1+)
 
 - Besides Settings → Interim narration, the page now also appears in the sidebar as an "Interim narration" row; opening it shows the full page. Hosts without a sidebar slot skip this automatically.
 - The page uses horizontal tabs: Basics / Prompt / Display / Interjections / Advanced, showing one section at a time instead of a long column.
 - Inactive panels stay mounted, so the prompt preview and patch status keep refreshing in the background.
 
-Both are local changes and are not part of the npm or GitHub releases.
+Since 1.0.1 both ship with the npm package and the GitHub release; each tab also has its own “Reset this page”, with “Reset everything” at the top-left.
 
 
 ## Versioning and releases
