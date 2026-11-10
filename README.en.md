@@ -65,6 +65,7 @@ The fields you'll actually touch:
 | `announcePlan` | on | Opens each turn with understanding and plan |
 | `enforce` | on | If a tool step had no narration, the next reminder gets sharper |
 | `escalateAfter` | 1 | How many silent steps before it gets sharper; 1 is the most eager |
+| `subagents` | inherit | Whether helper (subagent) sessions narrate too; "skip" keeps it on the main agent |
 
 `order`, `text`, `extra` and `logFile` are install-time options — edit `cordis.patch.yml` in your profile for those.
 

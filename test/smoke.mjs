@@ -31,6 +31,9 @@ import {
   DEFAULT_MAX_SENTENCES,
   DEFAULT_MIN_TOOL_CALLS,
   DEFAULT_STYLE,
+  DEFAULT_SUBAGENTS,
+  SUBAGENT_MODES,
+  isSubagentContext,
   DEFAULT_ANNOUNCE_PLAN,
   DEFAULT_REMINDER,
   DEFAULT_REMINDER_ORDER,
@@ -488,12 +491,44 @@ test('resolveConfig fills defaults', () => {
     reminder: DEFAULT_REMINDER,
     enforce: DEFAULT_ENFORCE,
     escalateAfter: DEFAULT_ESCALATE_AFTER,
+    subagents: DEFAULT_SUBAGENTS,
     text: undefined,
     extra: undefined,
     debug: false,
     logFile: undefined,
     foldPatchAsar: undefined,
   })
+})
+
+test('subagent sessions can be skipped without muting the main agent', () => {
+  assert.deepEqual(SUBAGENT_MODES, ['inherit', 'skip'])
+  const main = { agent: { session: { header: { id: 'main' } } } }
+  const child = {
+    agent: {
+      session: {
+        header: { id: 'child', parentSession: 'main', origin: 'subagent', delegationDepth: 1 },
+      },
+    },
+  }
+  const fallback = { agent: { session: { parentSessionId: 'main' } } }
+
+  assert.equal(isSubagentContext(undefined), false)
+  assert.equal(isSubagentContext({}), false)
+  assert.equal(isSubagentContext(main), false)
+  assert.equal(isSubagentContext(child), true)
+  assert.equal(isSubagentContext(fallback), true)
+
+  const skip = fakeCtx()
+  apply(skip.ctx, { subagents: 'skip' })
+  const [section, reminder] = skip.sections
+  assert.equal(section.text(child), '')
+  assert.equal(reminder.text(child), '')
+  assert.match(section.text(main), /## 过程叙述/)
+  assert.match(reminder.text(main), /## 过程叙述提醒/)
+
+  const inherit = fakeCtx()
+  apply(inherit.ctx, {})
+  assert.match(inherit.sections[0].text(child), /## 过程叙述/)
 })
 
 test('resolveConfig rejects bad values', () => {
@@ -519,6 +554,7 @@ test('resolveConfig rejects bad values', () => {
     [{ escalateAfter: 0 }, /config\.escalateAfter/],
     [{ escalateAfter: 6 }, /config\.escalateAfter/],
     [{ escalateAfter: 1.5 }, /config\.escalateAfter/],
+    [{ subagents: 'all' }, /config\.subagents/],
     [{ text: 1 }, /config\.text/],
     [{ extra: false }, /config\.extra/],
     [{ debug: 'on' }, /config\.debug/],
@@ -666,7 +702,7 @@ test('debug log records the mount and rotates oversized files', () => {
     const content = fs.readFileSync(logFile, 'utf8')
     assert.ok(content.length < 70 * 1024, 'log should have been rotated before writing')
     assert.match(content, /mounted order=8950 style=concise maxSentences=2 minToolCalls=1/)
-    assert.match(content, /reminder=true enforce=true escalateAfter=1 sectionChars=\d+ reminderChars=\d+/)
+    assert.match(content, /reminder=true enforce=true escalateAfter=1 subagents=inherit sectionChars=\d+ reminderChars=\d+/)
     assert.match(content, /--- section text ---/)
     assert.match(content, /--- reminder text ---/)
   } finally {

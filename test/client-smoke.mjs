@@ -58,6 +58,7 @@ const snapshot = {
     reminder: true,
     enforce: true,
     escalateAfter: 1,
+    subagents: 'inherit',
   },
   base: null,
   user: null,
@@ -161,6 +162,15 @@ assert.equal(section.options.locale, 'interimNarration')
 const sectionNode = section.Component({ view: 'page', t: (key) => key })
 assert.ok(sectionNode && typeof sectionNode.type === 'function', 'settings section must render the settings page')
 assert.equal(sectionNode.type(sectionNode.props).type, 'div', 'settings section must render a container')
+
+// The sidebar panel host does not scroll the panel; the page must do it.
+const mainPanel = registered['interim-narration']
+assert.ok(mainPanel && mainPanel.options.name === 'main', 'main panel must be registered under the stable id')
+const mainNode = mainPanel.Component({ t: (key) => key })
+const mainPage = mainNode.type(mainNode.props)
+assert.equal(mainPage.props.style.overflowY, 'auto', 'sidebar panel must be its own scroll container')
+assert.equal(mainPage.props.style.height, '100%', 'sidebar panel must fill the host height')
+assert.equal(mainPage.props.style.boxSizing, 'border-box')
 
 // Sidebar entry: the page can also live as its own panel.
 assert.ok(
@@ -377,7 +387,7 @@ const resetButtons = findNodes(
   container,
   (node) => node.type === 'button' && String(node.props?.title ?? '').endsWith('resetField'),
 )
-assert.ok(resetButtons.length >= 13, 'every editable field must offer a reset button')
+assert.ok(resetButtons.length >= 14, 'every editable field must offer a reset button')
 await resetButtons[0].props.onClick()
 assert.ok(
   calls.some(([k, ops]) => k === 'mutate' && JSON.stringify(ops) === JSON.stringify([
@@ -392,9 +402,16 @@ const resetAllButton = findNodes(
 assert.ok(resetAllButton, 'reset-all button must exist')
 await resetAllButton.props.onClick()
 assert.ok(
-  calls.some(([k, ops]) => k === 'mutate' && Array.isArray(ops) && ops.length === 13 && ops.every((op) => op.op === 'unset')),
+  calls.some(([k, ops]) => k === 'mutate' && Array.isArray(ops) && ops.length === 14 && ops.every((op) => op.op === 'unset')),
   'reset-all must unset all editable fields at once',
 )
+const subagentSelects = findNodes(
+  container,
+  (node) => node.type === 'select' && (node.children ?? []).some((child) => child?.props?.value === 'skip'),
+)
+assert.ok(subagentSelects.length >= 1, 'the subagent setting must render as a select')
+assert.equal(subagentSelects[0].props.value, 'inherit', 'subagents default to inherit')
+
 const pageResetButtons = findNodes(
   container,
   (node) => node.type === 'button' && String(node.children?.[0] ?? '').endsWith('resetPage'),

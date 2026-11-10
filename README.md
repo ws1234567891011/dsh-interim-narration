@@ -65,6 +65,7 @@ dsh plugin --profile desktop add link:C:/path/to/dsh-interim-narration
 | `announcePlan` | 开 | 每轮开头先说理解和计划 |
 | `enforce` | 开 | 某一步只调工具没说话，下一条提示会加压 |
 | `escalateAfter` | 1 | 连续静默几步开始加压，1 最积极 |
+| `subagents` | 继承 | 子代理会话是否也叙述；选「跳过」只让主代理叙述 |
 
 `order`、`text`、`extra`、`logFile` 属于安装期参数，改它们要编辑 profile 里的 `cordis.patch.yml`。
 
