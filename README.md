@@ -111,6 +111,8 @@ DSH 本身有个行为：一轮回答进行中你插一句话，这一轮的过�
 
 改完需要完全退出 DSH 再打开才生效。DSH 升级会覆盖 `app.asar`，状态会回到「原版」，再点一次「启用补丁」即可。这个开关只动本机文件，不写 profile 配置，也不随 npm 版本发布。
 
+从 1.1.0 起，打补丁时会在 `app.asar` 旁写一份 `.interleaved.json` 元数据；DSH 更新后如果安装文件里已经没有补丁，页面会显示「之前打过补丁，但当前安装文件里没有补丁（多半是 DSH 更新过）」，而不是误报成从未打过。
+
 ## 设置页：侧边栏入口与横向分区（1.0.1+）
 
 - 除了「设置 → 过程叙述」，页面现在也会出现在侧边栏，显示为一行「过程叙述」，点开即整页配置；宿主没有侧边栏插槽时自动跳过。
@@ -118,6 +120,15 @@ DSH 本身有个行为：一轮回答进行中你插一句话，这一轮的过�
 - 未激活的面板仍然保持挂载，提示词预览和补丁状态会在后台继续刷新。
 
 从 1.0.1 起，这两项随 npm 包和 GitHub Release 一起发布；每个标签页底部还有「本页恢复默认」，页面左上角是「全部恢复默认」。
+
+## 1.1.0 的本机新增（尚未发布）
+
+- **配置坏了不打断对话**：profile patch 改坏导致校验失败时，插件沿用上一份有效配置，并写一条 `config-invalid` 调试日志，不再让整轮请求报错。
+- **设置页显示版本与升级入口**：页面底部显示「当前安装版本」，旁边有「检查 npm」按钮；结果会提示 profile 里的拷贝安装可能落后，建议用 link 安装。
+- **补丁生命周期**：插话补丁会记录元数据，DSH 更新覆盖后能识别「补丁丢了」，提示重新启用。
+- **子代理端到端测试**：`npm run test:e2e:subagent` 会让主代理真的调用 `subagent` 工具，验证「跳过子代理」时子代理请求不带过程叙述段、主代理仍带两段。
+
+这一版目前只在本机安装，没有发到 npm 或 GitHub Release。
 
 
 ## 版本与发布
@@ -135,9 +146,10 @@ DSH 本身有个行为：一轮回答进行中你插一句话，这一轮的过�
 ```bash
 npm test            # 宿主逻辑 + 客户端 bundle + 打包清单
 npm run test:e2e    # 真跑一次 headless DSH + 本地 mock 模型，约 6 秒
+npm run test:e2e:subagent  # 主代理调用 subagent，验证子代理不再叙述
 ```
 
-`test/e2e.mjs` 会自己找本机的 DSH；找不到就打印 `SKIPPED` 退出（CI 和没装 DSH 的机器都能跑）。更多说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+`test/e2e.mjs` 和 `test/e2e-subagent.mjs` 会自己找本机的 DSH；找不到就打印 `SKIPPED` 退出（CI 和没装 DSH 的机器都能跑）。更多说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 发布由 `.github/workflows/release.yml` 完成（打 tag 即发布 npm + GitHub Release）。目前仍用仓库 secret `NPM_TOKEN`；迁移到 npm Trusted Publishing 需要账号先开启 2FA，workflow 里留了 TODO。
 

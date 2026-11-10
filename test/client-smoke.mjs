@@ -341,6 +341,17 @@ const saveButton = findNodes(
 )[0]
 assert.ok(saveButton, 'save button must exist')
 
+// --- version row (1.0.2+): installed version and an on-demand npm check -----
+const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+assert.equal(moduleExports.__version, pkg.version, 'the client bundle must carry the package version')
+assert.ok(tree.includes('versionCurrent'), 'page must show the installed version')
+assert.ok(tree.includes('versionHint'), 'page must explain that the profile copy can drift')
+const versionButton = findNodes(
+  container,
+  (node) => node.type === 'button' && String(node.children?.[0] ?? '').endsWith('versionCheck'),
+)[0]
+assert.ok(versionButton, 'page must offer an npm update check')
+
 // --- `/narration` command ---------------------------------------------------
 const command = commandRegistrations[0]
 assert.ok(command, 'apply must register the /narration command')

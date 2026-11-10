@@ -42,6 +42,9 @@ import {
   STYLES,
   SECTION_NAME,
   buildReminderText,
+  META_ROUTE,
+  VERSION,
+  metaHandler,
 } from '../lib/core.js'
 
 /** Minimal stand-in for a Cordis plugin context with a prompt registry. */
@@ -742,12 +745,27 @@ test('the local fold patch applies and reverts in place', () => {
     assert.equal(foldPatchStatus(file).state, 'original')
     applyFoldPatch(file)
     const patched = fs.readFileSync(file, 'utf8')
-    assert.equal(foldPatchStatus(file).state, 'patched')
+    const applied = foldPatchStatus(file)
+    assert.equal(applied.state, 'patched')
     assert.ok(patched.includes(FOLD_PATCH_REPLACEMENTS[0].patched))
     assert.equal(Buffer.byteLength(patched), Buffer.byteLength(original))
+    assert.ok(applied.meta, 'a patched archive records when it was patched')
+    assert.equal(applied.stale, false)
+
+    // Simulate a DSH update: the archive is replaced but the sidecar stays.
+    fs.writeFileSync(file, original)
+    const afterUpdate = foldPatchStatus(file)
+    assert.equal(afterUpdate.state, 'original')
+    assert.equal(afterUpdate.stale, true, 'original bytes plus a sidecar means the patch was lost')
+    applyFoldPatch(file)
+    assert.equal(foldPatchStatus(file).stale, false, 're-applying clears the stale flag')
+
     revertFoldPatch(file)
     assert.equal(fs.readFileSync(file, 'utf8'), original)
-    assert.equal(foldPatchStatus(file).state, 'original')
+    const reverted = foldPatchStatus(file)
+    assert.equal(reverted.state, 'original')
+    assert.equal(reverted.meta, null, 'reverting removes the sidecar')
+    assert.equal(reverted.stale, false)
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
   }
@@ -769,10 +787,59 @@ test('the fold-patch route is registered when webServer is available', () => {
     })
   }
   apply(ctx, {})
-  assert.equal(registrations.length, 1)
-  assert.equal(registrations[0].kind, 'exact')
-  assert.equal(registrations[0].path, FOLD_PATCH_ROUTE)
-  assert.equal(typeof registrations[0].handler, 'function')
+  const fold = registrations.find((entry) => entry.path === FOLD_PATCH_ROUTE)
+  const meta = registrations.find((entry) => entry.path === META_ROUTE)
+  assert.ok(fold, 'the fold-patch route must be registered')
+  assert.ok(meta, 'the version route must be registered')
+  assert.equal(fold.kind, 'exact')
+  assert.equal(meta.kind, 'exact')
+  assert.equal(typeof fold.handler, 'function')
+  assert.equal(typeof meta.handler, 'function')
+})
+
+test('the compiled version matches package.json', () => {
+  const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  assert.equal(VERSION, pkg.version)
+})
+
+test('an invalid live config falls back to the last valid setting', () => {
+  const raw = { style: 'verbose', debug: false }
+  const { ctx, sections } = fakeCtx()
+  apply(ctx, raw)
+  const main = sections.find((candidate) => candidate.name === SECTION_NAME)
+  const before = main.text()
+  assert.match(before, /1–5 句/, 'verbose should render five sentences')
+  raw.style = 'fancy'
+  const after = main.text()
+  assert.equal(after, before, 'a malformed value must not break the prompt')
+  raw.style = 'verbose'
+  assert.equal(main.text(), before)
+  assert.equal(sections.length, 2)
+})
+
+test('the meta route reports the installed and latest npm versions', async () => {
+  const realFetch = globalThis.fetch
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ version: '9.9.9' }) })
+  try {
+    const payload = await new Promise((resolve) => {
+      const res = {
+        status: 0,
+        writeHead(code) {
+          this.status = code
+        },
+        end(body) {
+          resolve({ status: this.status, body: JSON.parse(String(body)) })
+        },
+      }
+      metaHandler({ method: 'GET', url: '/dsh-interim-narration/meta?refresh=1' }, res)
+    })
+    assert.equal(payload.status, 200)
+    assert.equal(payload.body.version, VERSION)
+    assert.equal(payload.body.latest, '9.9.9')
+    assert.equal(payload.body.error, null)
+  } finally {
+    globalThis.fetch = realFetch
+  }
 })
 
 // --- runner ---------------------------------------------------------------
@@ -780,7 +847,7 @@ test('the fold-patch route is registered when webServer is available', () => {
 let failed = 0
 for (const { title, fn } of tests) {
   try {
-    fn()
+    await fn()
     console.log(`ok   - ${title}`)
   } catch (error) {
     failed += 1

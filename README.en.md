@@ -111,6 +111,8 @@ DSH has a built-in behaviour: if you send a message while a turn is still runnin
 
 Restart DSH fully after changing it. A DSH update overwrites `app.asar`, the status returns to "original", and one more click re-applies it. This switch touches local files only; it writes no profile config and is not part of the npm release.
 
+Since 1.1.0 the patch also writes a `.interleaved.json` sidecar next to `app.asar`; after a DSH update, if the installed file no longer carries the patch, the page says "a patch was applied earlier, but the current install has none (probably a DSH update)" instead of pretending it was never patched.
+
 ## Settings page: sidebar entry and horizontal tabs (1.0.1+)
 
 - Besides Settings → Interim narration, the page now also appears in the sidebar as an "Interim narration" row; opening it shows the full page. Hosts without a sidebar slot skip this automatically.
@@ -118,6 +120,15 @@ Restart DSH fully after changing it. A DSH update overwrites `app.asar`, the sta
 - Inactive panels stay mounted, so the prompt preview and patch status keep refreshing in the background.
 
 Since 1.0.1 both ship with the npm package and the GitHub release; each tab also has its own “Reset this page”, with “Reset everything” at the top-left.
+
+## 1.1.0 local additions (not published)
+
+- **Bad config no longer breaks a turn**: if the profile patch becomes invalid, the plugin keeps using the last valid settings and writes a `config-invalid` debug line instead of failing the request.
+- **Version row**: the page shows the installed version plus a “Check npm” button; the result reminds you that a copied profile install can drift and suggests a link install.
+- **Patch lifecycle**: the interjection patch records metadata, so after a DSH update the page can say the patch was lost and needs re-applying.
+- **Subagent end-to-end test**: `npm run test:e2e:subagent` makes the parent agent call the real `subagent` tool and asserts the child request carries no narration section while the parent keeps both.
+
+This version is installed locally only; nothing was published to npm or GitHub Releases.
 
 
 ## Versioning and releases
@@ -135,9 +146,10 @@ Since 1.0.0 this project follows semantic versioning: within 1.x no existing opt
 ```bash
 npm test            # host logic + client bundle + package manifest
 npm run test:e2e    # one real headless DSH run against a local mock model (~6s)
+npm run test:e2e:subagent  # parent calls subagent; the child must not narrate
 ```
 
-`test/e2e.mjs` finds a local DSH install on its own and prints `SKIPPED` when there isn't one, so CI and machines without DSH can still run it. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+`test/e2e.mjs` and `test/e2e-subagent.mjs` find a local DSH install on their own and print `SKIPPED` when there isn't one, so CI and machines without DSH can still run them. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 Releases are cut by `.github/workflows/release.yml`: pushing a tag publishes to npm and creates the GitHub Release. It still uses the `NPM_TOKEN` repository secret; moving to npm Trusted Publishing requires 2FA to be enabled on the account first, and the workflow carries a TODO for that switch.
 
