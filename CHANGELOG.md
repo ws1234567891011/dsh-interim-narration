@@ -2,7 +2,7 @@
 
 ## 1.1.0
 
-> 本版目前只在本机安装，没有发布到 npm 或 GitHub Release。
+> 已发布到 npm 与 GitHub Release（v1.1.0）。
 
 - **配置坏了不会打断对话**：宿主每轮组装提示词时都会重新读取配置；如果 profile patch 改坏导致校验失败，插件会沿用上一份有效配置并写一条 `config-invalid` 调试日志，而不是让整轮请求报错。
 - **设置页显示版本与升级入口**：页面底部新增「当前安装版本 x.y.z」和「检查 npm」按钮，通过宿主新增的 `GET /dsh-interim-narration/meta` 路由读取 npm 最新版本（10 分钟缓存），并提示 profile 里的拷贝安装会漂移、可以用 link 安装。

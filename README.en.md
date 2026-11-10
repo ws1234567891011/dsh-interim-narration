@@ -121,14 +121,14 @@ Since 1.1.0 the patch also writes a `.interleaved.json` sidecar next to `app.asa
 
 Since 1.0.1 both ship with the npm package and the GitHub release; each tab also has its own “Reset this page”, with “Reset everything” at the top-left.
 
-## 1.1.0 local additions (not published)
+## 1.1.0 additions
 
 - **Bad config no longer breaks a turn**: if the profile patch becomes invalid, the plugin keeps using the last valid settings and writes a `config-invalid` debug line instead of failing the request.
 - **Version row**: the page shows the installed version plus a “Check npm” button; the result reminds you that a copied profile install can drift and suggests a link install.
 - **Patch lifecycle**: the interjection patch records metadata, so after a DSH update the page can say the patch was lost and needs re-applying.
 - **Subagent end-to-end test**: `npm run test:e2e:subagent` makes the parent agent call the real `subagent` tool and asserts the child request carries no narration section while the parent keeps both.
 
-This version is installed locally only; nothing was published to npm or GitHub Releases.
+Since 1.1.0 these ship with the npm package and the GitHub release; upgrading from 1.0.2 needs no config changes.
 
 
 ## Versioning and releases
