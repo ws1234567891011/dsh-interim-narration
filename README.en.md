@@ -100,6 +100,25 @@ To maximise cache hits: pin the language, turn `enforce` off when you don't need
 
 We also measured the alternative of moving the dynamic reminder to the end of the request (the host's runtime context). It does keep the system prompt byte-identical, but every silent step adds a persisted ~230-token context message that keeps being billed on later requests; with a 50k-token history and cache hits at roughly a tenth of the price, it takes about two thousand more requests to break even. So we kept the current design.
 
+## Fold after an interjection (local switch)
+
+DSH has a built-in behaviour: if you send a message while a turn is still running, that turn's process group stays open for the rest of the turn and cannot be folded when it finishes — `ui-chat` treats "there was an interjection" as a permanent reason to keep it open. Since 1.0.0 the plugin exposes a local switch at Settings → Interim narration → Interjections (the plugin page's config is the same page):
+
+- the status line shows "patched / original / mixed" plus the `app.asar` path and size;
+- **Apply patch** rewrites three equal-length byte ranges in the installed `resources/app.asar` and keeps a backup named `app.asar.bak-interleaved`;
+- **Restore** copies the backup back.
+
+Restart DSH fully after changing it. A DSH update overwrites `app.asar`, the status returns to "original", and one more click re-applies it. This switch touches local files only; it writes no profile config and is not part of the npm release.
+
+## Settings page: sidebar entry and horizontal tabs (local)
+
+- Besides Settings → Interim narration, the page now also appears in the sidebar as an "Interim narration" row; opening it shows the full page. Hosts without a sidebar slot skip this automatically.
+- The page uses horizontal tabs: Basics / Prompt / Display / Interjections / Advanced, showing one section at a time instead of a long column.
+- Inactive panels stay mounted, so the prompt preview and patch status keep refreshing in the background.
+
+Both are local changes and are not part of the npm or GitHub releases.
+
+
 ## Versioning and releases
 
 Since 1.0.0 this project follows semantic versioning: within 1.x no existing option is removed and the settings page and `/narration` command keep working, while new capabilities arrive with defaults. Every release declares what changed and whether upgrading needs an action, in [CHANGELOG.md](CHANGELOG.md) and the GitHub Release; the release workflow runs `node test/release-check.mjs` before publishing and fails if that declaration is missing. The full policy is in [VERSIONING.md](VERSIONING.md).

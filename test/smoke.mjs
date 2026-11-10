@@ -42,6 +42,14 @@ import {
 } from '../lib/core.js'
 
 /** Minimal stand-in for a Cordis plugin context with a prompt registry. */
+import {
+  FOLD_PATCH_REPLACEMENTS,
+  FOLD_PATCH_ROUTE,
+  applyFoldPatch,
+  foldPatchStatus,
+  revertFoldPatch,
+} from '../lib/fold-patch.js'
+
 function fakeCtx({ withEvents = true } = {}) {
   const sections = []
   const effectLabels = []
@@ -484,6 +492,7 @@ test('resolveConfig fills defaults', () => {
     extra: undefined,
     debug: false,
     logFile: undefined,
+    foldPatchAsar: undefined,
   })
 })
 
@@ -686,6 +695,48 @@ test('a broken log path never breaks mounting', () => {
   const { ctx, sections } = fakeCtx()
   apply(ctx, { debug: true, logFile: path.join(os.tmpdir(), 'no-such-dir-xyz', 'a.log') })
   assert.equal(sections.length, 2)
+})
+
+test('the local fold patch applies and reverts in place', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-fold-'))
+  const file = path.join(dir, 'app.asar')
+  const original = `AAA ${FOLD_PATCH_REPLACEMENTS.map((item) => item.original).join(' BBB ')} CCC`
+  try {
+    fs.writeFileSync(file, original)
+    assert.equal(foldPatchStatus(file).state, 'original')
+    applyFoldPatch(file)
+    const patched = fs.readFileSync(file, 'utf8')
+    assert.equal(foldPatchStatus(file).state, 'patched')
+    assert.ok(patched.includes(FOLD_PATCH_REPLACEMENTS[0].patched))
+    assert.equal(Buffer.byteLength(patched), Buffer.byteLength(original))
+    revertFoldPatch(file)
+    assert.equal(fs.readFileSync(file, 'utf8'), original)
+    assert.equal(foldPatchStatus(file).state, 'original')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('the fold-patch route is registered when webServer is available', () => {
+  const registrations = []
+  const { ctx } = fakeCtx()
+  ctx.inject = (services, callback) => {
+    assert.deepEqual(services, ['webServer'])
+    callback({
+      effect: (fn) => fn(),
+      webServer: {
+        register(spec) {
+          registrations.push(spec)
+          return () => {}
+        },
+      },
+    })
+  }
+  apply(ctx, {})
+  assert.equal(registrations.length, 1)
+  assert.equal(registrations[0].kind, 'exact')
+  assert.equal(registrations[0].path, FOLD_PATCH_ROUTE)
+  assert.equal(typeof registrations[0].handler, 'function')
 })
 
 // --- runner ---------------------------------------------------------------

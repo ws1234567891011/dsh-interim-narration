@@ -162,6 +162,22 @@ const sectionNode = section.Component({ view: 'page', t: (key) => key })
 assert.ok(sectionNode && typeof sectionNode.type === 'function', 'settings section must render the settings page')
 assert.equal(sectionNode.type(sectionNode.props).type, 'div', 'settings section must render a container')
 
+// Sidebar entry: the page can also live as its own panel.
+assert.ok(
+  calls.some(
+    ([k, name, key]) => k === 'slots.register' && name === 'main' && key === 'interim-narration',
+  ),
+  'main panel must be registered under the stable id',
+)
+const sidebar = registered['sidebar.panellist']
+assert.ok(sidebar, 'sidebar entry must be registered when the slot exists')
+assert.equal(sidebar.options.id, 'interim-narration')
+assert.equal(sidebar.options.locale, 'interimNarration')
+const row = sidebar.Component({ size: 16 })
+assert.equal(typeof row.type, 'function', 'sidebar row renders the icon component')
+const icon = row.type({ size: 16 })
+assert.equal(icon.type, 'svg', 'sidebar row must render an icon')
+
 const summary = page.Component({ view: 'summary', t: (key) => key })
 assert.ok(summary, 'summary view must render something')
 
@@ -172,13 +188,32 @@ assert.equal(container.type, 'div', 'settings component must render a container 
 
 const tree = JSON.stringify(container)
 assert.ok(tree.includes('visibilityTitle') || tree.includes('sectionDisplay'), 'page must render the display block')
-assert.ok(tree.includes('sectionBasic'), 'page must group the basics')
-assert.ok(tree.includes('sectionPrompt'), 'page must group the opening and reminder toggles')
-assert.ok(tree.includes('sectionAdvanced'), 'page must group the advanced fields')
+assert.ok(tree.includes('tabBasic'), 'page must group the basics')
+assert.ok(tree.includes('tabPrompt'), 'page must group the opening and reminder toggles')
+assert.ok(tree.includes('tabAdvanced'), 'page must group the advanced fields')
 assert.ok(tree.includes('maxSentencesFollow'), 'a zero sentence budget must explain that the preset decides')
 assert.ok(tree.includes('visibilityNote'), 'display block must explain the settings equivalent')
+assert.ok(tree.includes('sectionInterjection'), 'page must expose the local fold patch block')
+assert.ok(tree.includes('introBasic'), 'every tab must open with a plain-language intro')
+assert.ok(tree.includes('introInterjection'), 'the interjection tab must explain what it is for')
+assert.ok(tree.includes('interjectionExample'), 'the interjection tab must include a concrete example')
+assert.ok(tree.includes('interjectionEffect'), 'the interjection tab must say what the patch does not change')
+assert.ok(
+  tree.includes('interjectionEnable') && tree.includes('interjectionDisable'),
+  'patch block must offer enable and revert actions',
+)
+assert.ok(tree.includes('interjectionNote'), 'patch block must explain the local-only caveat')
 assert.ok(tree.includes('presetCollapse') && tree.includes('presetExpand'), 'display block must offer both presets')
 assert.ok(tree.includes('enforce'), 'page must expose the enforcement toggle')
+const tabButtons = findNodes(
+  container,
+  (node) => node.type === 'button' && (node.children ?? []).some((child) => String(child).endsWith('tabPrompt')),
+)
+assert.equal(tabButtons.length, 1, 'page must render a horizontal tab for each group')
+assert.ok(
+  findNodes(container, (node) => node.type === 'button' && (node.children ?? []).some((child) => String(child).endsWith('tabInterjection'))).length === 1,
+  'the interjection block must have its own tab',
+)
 
 // --- v0.8.0: contract preset and prompt preview -----------------------------
 assert.ok(tree.includes('contract'), 'page must expose the prompt contract preset')
@@ -359,6 +394,32 @@ await resetAllButton.props.onClick()
 assert.ok(
   calls.some(([k, ops]) => k === 'mutate' && Array.isArray(ops) && ops.length === 13 && ops.every((op) => op.op === 'unset')),
   'reset-all must unset all editable fields at once',
+)
+const pageResetButtons = findNodes(
+  container,
+  (node) => node.type === 'button' && String(node.children?.[0] ?? '').endsWith('resetPage'),
+)
+assert.ok(pageResetButtons.length >= 4, 'each tab page must offer its own reset button')
+await pageResetButtons[0].props.onClick()
+assert.ok(
+  calls.some(([k, ops]) => k === 'mutate' && JSON.stringify(ops) === JSON.stringify([
+    { op: 'unset', path: ['enabled'] },
+    { op: 'unset', path: ['style'] },
+    { op: 'unset', path: ['contract'] },
+    { op: 'unset', path: ['maxSentences'] },
+    { op: 'unset', path: ['minToolCalls'] },
+    { op: 'unset', path: ['language'] },
+  ])),
+  'page reset must unset only that page fields',
+)
+await pageResetButtons[2].props.onClick()
+assert.ok(
+  calls.some(([k, ops]) => k === 'chat-mutate' && JSON.stringify(ops) === JSON.stringify([
+    { op: 'set', path: ['transcriptView'], value: 'standard' },
+    { op: 'set', path: ['collapseTiming'], value: 'completion' },
+    { op: 'set', path: ['foldedReplies'], value: 'all' },
+  ])),
+  'display page reset must restore the ui-chat defaults',
 )
 
 console.log('client smoke: all assertions passed')
